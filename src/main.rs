@@ -18,7 +18,7 @@ enum Commands {
 #[derive(Args)]
 struct VersionArgs {
     #[arg(short, long, default_value = "minor")]
-    scope: Option<String>,
+    scope: String,
 }
 
 fn main() {

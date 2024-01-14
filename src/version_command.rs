@@ -1,7 +1,7 @@
 use crate::VersionArgs;
 
 pub(crate) fn run(args: &VersionArgs) {
-    let scope = args.scope.as_ref().unwrap().clone();
+    let scope = args.scope.clone();
     // TODO: fn latest_tag() -> String
     let latest_tag = "v0.1.0".to_string();
     let version = version(scope, latest_tag);

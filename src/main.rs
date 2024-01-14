@@ -25,6 +25,8 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::Version(args) => { version_command::run(args); }
+        Commands::Version(args) => {
+            version_command::run(args);
+        }
     }
 }

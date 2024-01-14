@@ -23,8 +23,12 @@ fn version(scope: String, latest_tag: String) -> String {
 fn metadata(branch_name: String, short_commit_sha: Option<String>) -> String {
     if branch_name == "develop" {
         match short_commit_sha {
-            Some(short_commit_sha_ok) => { format!("-dev.{}", short_commit_sha_ok) },
-            None => { panic!("Not found short_commit_sha on develop branch") }
+            Some(short_commit_sha_ok) => {
+                format!("-dev.{}", short_commit_sha_ok)
+            }
+            None => {
+                panic!("Not found short_commit_sha on develop branch")
+            }
         }
     } else {
         "".to_string()

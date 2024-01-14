@@ -1,0 +1,19 @@
+# This is a basic workflow to help you get started with Actions
+
+name: Lint
+
+on: push
+
+jobs:
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Clippy
+        run: cargo clippy -- -Dwarnings
+  rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run rustfmt
+        run: cargo fmt --all -- --check

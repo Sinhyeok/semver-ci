@@ -8,14 +8,21 @@ Semantic Versioning for CI/CD
 ```shell
 brew install rustup
 ```
-### Run
+### Clone Project and Run
 ```shell
+# Clone project
+git clone git@github.com:Sinhyeok/semver-ci.git
+cd semver-ci
+
+# Show help
 cargo run version --help
+
+# Run
 cargo run version
 cargo run version --scope major
 cargo run version --scope patch
 ```
-### Install lint tools
+### Install Lint Tools
 ```shell
 rustup component add clippy
 rustup component add rustfmt

@@ -1,3 +1,4 @@
+mod semantic_version;
 mod version_command;
 
 use clap::{Args, Parser, Subcommand};

@@ -1,3 +1,4 @@
+use crate::semantic_version::SemanticVersion;
 use crate::VersionArgs;
 
 pub(crate) fn run(args: &VersionArgs) {
@@ -16,8 +17,23 @@ pub(crate) fn run(args: &VersionArgs) {
 }
 
 fn version(scope: String, latest_tag: String) -> String {
-    println!("scope: {}, latest_tag: {}", scope, latest_tag);
-    "v0.2.0".to_string()
+    let mut semantic_version = match SemanticVersion::from_string(latest_tag[1..].to_string()) {
+        Ok(semantic_version) => semantic_version,
+        Err(e) => {
+            panic!("{}: {}", e, latest_tag)
+        }
+    };
+
+    match scope.as_str() {
+        "major" => semantic_version.increase_major(),
+        "minor" => semantic_version.increase_minor(),
+        "patch" => semantic_version.increase_patch(),
+        _ => {
+            panic!("Invalid scope: {}", scope)
+        }
+    }
+
+    semantic_version.to_string(true)
 }
 
 fn metadata(branch_name: String, short_commit_sha: Option<String>) -> String {

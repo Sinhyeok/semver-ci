@@ -1,10 +1,18 @@
 use crate::semantic_version::SemanticVersion;
-use crate::VersionArgs;
+use crate::{git_service, VersionArgs};
+
+const DEFAULT_SEMANTIC_VERSION_TAG: &str = "v0.0.0";
 
 pub(crate) fn run(args: &VersionArgs) {
     let scope = args.scope.clone();
-    // TODO: fn latest_tag() -> String
-    let latest_tag = "v0.1.0".to_string();
+    let repo = match git_service::open_repo() {
+        Ok(repo) => repo,
+        Err(e) => {
+            panic!("Failed to open git repo: {}", e)
+        }
+    };
+    let latest_tag = git_service::latest_semantic_version_tag(&repo)
+        .unwrap_or_else(|| DEFAULT_SEMANTIC_VERSION_TAG.to_string());
     let version = version(scope, latest_tag);
 
     // TODO: fn branch_name() -> String

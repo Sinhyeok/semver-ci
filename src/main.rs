@@ -1,3 +1,4 @@
+mod git_service;
 mod semantic_version;
 mod version_command;
 

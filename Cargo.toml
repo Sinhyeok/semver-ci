@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.4.16", features = ["derive", "env"] }
+git2 = { version = "0.18.1", features = ["vendored-libgit2", "vendored-openssl", "zlib-ng-compat"] }
+regex = "1.10.2"

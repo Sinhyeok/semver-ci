@@ -13,7 +13,7 @@ pub(crate) fn run(args: &VersionArgs) {
         }
     };
     let latest_tag = git_service::latest_semantic_version_tag(&repo)
-        .unwrap_or_else(|| DEFAULT_SEMANTIC_VERSION_TAG.to_string());
+        .unwrap_or(DEFAULT_SEMANTIC_VERSION_TAG.to_string());
     let version = version(scope, latest_tag);
 
     let (branch_name, short_commit_sha) = pipeline::pipeline_info();

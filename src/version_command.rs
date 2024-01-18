@@ -30,15 +30,7 @@ fn version(scope: String, latest_tag: String) -> String {
         }
     };
 
-    match scope.as_str() {
-        "major" => semantic_version.increase_major(),
-        "minor" => semantic_version.increase_minor(),
-        "patch" => semantic_version.increase_patch(),
-        _ => {
-            panic!("Invalid scope: {}", scope)
-        }
-    }
-
+    semantic_version.increase_by_scope(scope);
     semantic_version.to_string(true)
 }
 

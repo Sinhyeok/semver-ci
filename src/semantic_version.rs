@@ -20,6 +20,17 @@ impl SemanticVersion {
         self.patch += 1;
     }
 
+    pub fn increase_by_scope(&mut self, scope: String) {
+        match scope.as_str() {
+            "major" => self.increase_major(),
+            "minor" => self.increase_minor(),
+            "patch" => self.increase_patch(),
+            _ => {
+                panic!("Invalid scope: {}", scope)
+            }
+        }
+    }
+
     pub fn from_string(version_string: String) -> Result<Self, String> {
         let parts: Vec<&str> = version_string.split('.').collect();
 

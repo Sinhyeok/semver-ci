@@ -1,5 +1,10 @@
+use crate::git_repo::GitRepo;
+use crate::github_action::GithubAction;
+use crate::gitlab_ci::GitlabCI;
+use crate::pipeline::Pipeline;
 use crate::semantic_version::SemanticVersion;
 use crate::{git_service, VersionArgs};
+use std::env;
 
 const DEFAULT_SEMANTIC_VERSION_TAG: &str = "v0.0.0";
 
@@ -15,10 +20,7 @@ pub(crate) fn run(args: &VersionArgs) {
         .unwrap_or_else(|| DEFAULT_SEMANTIC_VERSION_TAG.to_string());
     let version = version(scope, latest_tag);
 
-    // TODO: fn branch_name() -> String
-    let branch_name = "develop".to_string();
-    // TODO: fn short_commit_sha() -> Option<String>
-    let short_commit_sha = Some("ahs9df9d".to_string());
+    let (branch_name, short_commit_sha) = pipeline_info();
     let metadata = metadata(branch_name, short_commit_sha);
 
     println!("{}{}", version, metadata)
@@ -44,17 +46,26 @@ fn version(scope: String, latest_tag: String) -> String {
     semantic_version.to_string(true)
 }
 
-fn metadata(branch_name: String, short_commit_sha: Option<String>) -> String {
+fn metadata(branch_name: String, short_commit_sha: String) -> String {
     if branch_name == "develop" {
-        match short_commit_sha {
-            Some(short_commit_sha_ok) => {
-                format!("-dev.{}", short_commit_sha_ok)
-            }
-            None => {
-                panic!("Not found short_commit_sha on develop branch")
-            }
-        }
+        format!("-dev.{}", short_commit_sha)
     } else {
         "".to_string()
+    }
+}
+
+fn pipeline_info() -> (String, String) {
+    if env::var("GITLAB_CI").map_or(false, |v| v == "true") {
+        let gitlab_ci = GitlabCI {};
+        (gitlab_ci.branch_name(), gitlab_ci.short_commit_sha())
+    } else if env::var("GITHUB_ACTIONS").map_or(false, |v| v == "true") {
+        let github_action = GithubAction {};
+        (
+            github_action.branch_name(),
+            github_action.short_commit_sha(),
+        )
+    } else {
+        let git_repo = GitRepo {};
+        (git_repo.branch_name(), git_repo.short_commit_sha())
     }
 }

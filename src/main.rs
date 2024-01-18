@@ -1,8 +1,13 @@
+mod git_repo;
 mod git_service;
+mod github_action;
+mod gitlab_ci;
+mod pipeline;
 mod semantic_version;
 mod version_command;
 
 use clap::{Args, Parser, Subcommand};
+use dotenv::dotenv;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -24,6 +29,7 @@ struct VersionArgs {
 }
 
 fn main() {
+    dotenv().ok();
     let cli = Cli::parse();
 
     match &cli.command {

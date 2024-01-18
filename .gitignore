@@ -11,3 +11,5 @@ target/
 
 # Jetbranins IDE
 .idea
+
+.env

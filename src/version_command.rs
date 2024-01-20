@@ -36,11 +36,12 @@ fn version(scope: String, latest_tag: String) -> String {
 }
 
 fn metadata(branch_name: String, short_commit_sha: String) -> String {
-    let release_pattern = Regex::new(r"^release/.*$").unwrap_or_else(|e| panic!("{}", e));
+    let release_candidate_pattern =
+        Regex::new(r"^(release|hotfix)/.*$").unwrap_or_else(|e| panic!("{}", e));
 
     if branch_name == "develop" {
         format!("-dev.{}", short_commit_sha)
-    } else if release_pattern.is_match(&branch_name) {
+    } else if release_candidate_pattern.is_match(&branch_name) {
         // TODO: Find "^v?(\d+\.\d+\.\d+)-rc\.\d+$" pattern tag and increase "rc\.\d+" number
         format!("-rc.{}", short_commit_sha)
     } else {

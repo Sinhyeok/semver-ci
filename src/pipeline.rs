@@ -1,5 +1,5 @@
 use crate::git_repo::GitRepo;
-use crate::github_action::{GITHUB_ACTIONS, GithubActions};
+use crate::github_actions::{GITHUB_ACTIONS, GithubActions};
 use crate::gitlab_ci::{GITLAB_CI, GitlabCI};
 use std::env;
 

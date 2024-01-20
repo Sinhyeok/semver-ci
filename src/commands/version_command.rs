@@ -14,8 +14,7 @@ pub(crate) struct VersionCommandArgs {
 }
 
 pub(crate) fn run(args: VersionCommandArgs) {
-    let last_tag = git_service::last_semantic_version_tag()
-        .unwrap_or(DEFAULT_SEMANTIC_VERSION_TAG.to_string());
+    let last_tag = git_service::last_semantic_version_tag(DEFAULT_SEMANTIC_VERSION_TAG.to_string());
     let version = version(args.scope, last_tag);
 
     let pipeline_info = pipelines::pipeline_info();

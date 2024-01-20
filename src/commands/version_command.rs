@@ -1,17 +1,22 @@
-use crate::commands::VersionArgs;
 use crate::git_service;
 use crate::pipelines;
 use crate::semantic_version::SemanticVersion;
+use clap::Args;
 use regex::Regex;
 
 const DEFAULT_SEMANTIC_VERSION_TAG: &str = "v0.0.0";
 const RELEASE_CANDIDATE_PATTERN: &str = r"^(release|hotfix)/.*$";
 
-pub(crate) fn run(args: &VersionArgs) {
-    let scope = args.scope.clone();
+#[derive(Args)]
+pub(crate) struct VersionCommandArgs {
+    #[arg(short, long, default_value = "minor")]
+    pub(crate) scope: String,
+}
+
+pub(crate) fn run(args: VersionCommandArgs) {
     let last_tag = git_service::last_semantic_version_tag()
         .unwrap_or(DEFAULT_SEMANTIC_VERSION_TAG.to_string());
-    let version = version(scope, last_tag);
+    let version = version(args.scope, last_tag);
 
     let pipeline_info = pipelines::pipeline_info();
     let metadata = metadata(pipeline_info.branch_name, pipeline_info.short_commit_sha);

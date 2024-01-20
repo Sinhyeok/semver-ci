@@ -1,6 +1,7 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Parser, Subcommand};
+use version_command::VersionCommandArgs;
 
-mod version_command;
+pub(crate) mod version_command;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -12,19 +13,11 @@ pub(crate) struct Cli {
 
 #[derive(Subcommand)]
 pub(crate) enum Commands {
-    Version(VersionArgs),
-}
-
-#[derive(Args)]
-pub(crate) struct VersionArgs {
-    #[arg(short, long, default_value = "minor")]
-    pub(crate) scope: String,
+    Version(VersionCommandArgs),
 }
 
 pub(crate) fn run() {
-    let cli = Cli::parse();
-
-    match &cli.command {
+    match Cli::parse().command {
         Commands::Version(args) => version_command::run(args),
     }
 }

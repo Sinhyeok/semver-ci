@@ -1,3 +1,4 @@
+use regex::Regex;
 use crate::pipeline;
 use crate::semantic_version::SemanticVersion;
 use crate::{git_service, VersionArgs};
@@ -35,8 +36,13 @@ fn version(scope: String, latest_tag: String) -> String {
 }
 
 fn metadata(branch_name: String, short_commit_sha: String) -> String {
+    let release_pattern = Regex::new(r"^release/.*$").unwrap_or_else(|e| panic!("{}", e));
+
     if branch_name == "develop" {
         format!("-dev.{}", short_commit_sha)
+    } else if release_pattern.is_match(&branch_name) {
+        // TODO: Find "^v?(\d+\.\d+\.\d+)-rc\.\d+$" pattern tag and increase "rc\.\d+" number
+        format!("-rc.{}", short_commit_sha)
     } else {
         "".to_string()
     }

@@ -15,10 +15,10 @@ pub(crate) enum PipelineType {
 }
 
 pub(crate) fn pipeline_type() -> PipelineType {
-    if env::var(GITLAB_CI).map_or(false, |v| v == "true") {
-        PipelineType::GitlabCI(GitlabCI)
-    } else if env::var(GITHUB_ACTIONS).map_or(false, |v| v == "true") {
+    if env::var(GITHUB_ACTIONS).map_or(false, |v| v == "true") {
         PipelineType::GithubActions(GithubActions)
+    } else if env::var(GITLAB_CI).map_or(false, |v| v == "true") {
+        PipelineType::GitlabCI(GitlabCI)
     } else {
         PipelineType::GitRepo(GitRepo)
     }

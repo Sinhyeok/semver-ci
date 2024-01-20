@@ -24,12 +24,8 @@ pub(crate) fn run(args: VersionCommandArgs) {
 }
 
 fn version(scope: String, last_tag: String) -> String {
-    let mut semantic_version = match SemanticVersion::from_string(last_tag[1..].to_string()) {
-        Ok(semantic_version) => semantic_version,
-        Err(e) => {
-            panic!("{}: {}", e, last_tag)
-        }
-    };
+    let mut semantic_version = SemanticVersion::from_string(last_tag[1..].to_string())
+        .unwrap_or_else(|e| panic!("{}: {}", e, last_tag));
 
     semantic_version.increase_by_scope(scope).to_string(true)
 }

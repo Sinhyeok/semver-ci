@@ -2,6 +2,11 @@
 # semver-ci
 Semantic Versioning for CI/CD
 
+## Getting Started
+```shell
+docker run -v .:/app tartar4s/semver-ci:v0.1.0 version
+```
+
 ## Development
 ### Install rustup
 #### Mac

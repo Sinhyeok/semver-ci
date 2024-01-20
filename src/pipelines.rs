@@ -1,6 +1,10 @@
-use crate::git_repo::GitRepo;
-use crate::github_actions::{GithubActions, GITHUB_ACTIONS};
-use crate::gitlab_ci::{GitlabCI, GITLAB_CI};
+mod git_repo;
+mod github_actions;
+mod gitlab_ci;
+
+use crate::pipelines::git_repo::GitRepo;
+use crate::pipelines::github_actions::{GithubActions, GITHUB_ACTIONS};
+use crate::pipelines::gitlab_ci::{GitlabCI, GITLAB_CI};
 use std::env;
 
 pub(crate) trait Pipeline {

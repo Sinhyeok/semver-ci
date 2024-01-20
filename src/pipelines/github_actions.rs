@@ -1,4 +1,4 @@
-use crate::pipeline::Pipeline;
+use crate::pipelines::Pipeline;
 use std::env;
 
 pub(crate) struct GithubActions;

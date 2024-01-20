@@ -1,4 +1,4 @@
-use crate::pipeline::Pipeline;
+use crate::pipelines::Pipeline;
 
 pub(crate) struct GitRepo;
 

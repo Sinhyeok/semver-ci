@@ -1,8 +1,5 @@
-mod git_repo;
 mod git_service;
-mod github_actions;
-mod gitlab_ci;
-mod pipeline;
+mod pipelines;
 mod semantic_version;
 mod version_command;
 

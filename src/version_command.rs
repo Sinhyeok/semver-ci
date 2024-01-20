@@ -1,4 +1,4 @@
-use crate::pipeline;
+use crate::pipelines;
 use crate::semantic_version::SemanticVersion;
 use crate::{git_service, VersionArgs};
 use regex::Regex;
@@ -12,7 +12,7 @@ pub(crate) fn run(args: &VersionArgs) {
         .unwrap_or(DEFAULT_SEMANTIC_VERSION_TAG.to_string());
     let version = version(scope, last_tag);
 
-    let pipeline_info = pipeline::pipeline_info();
+    let pipeline_info = pipelines::pipeline_info();
     let metadata = metadata(pipeline_info.branch_name, pipeline_info.short_commit_sha);
 
     println!("{}{}", version, metadata)

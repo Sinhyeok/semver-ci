@@ -1,5 +1,5 @@
 use crate::git_repo::GitRepo;
-use crate::github_action::GithubAction;
+use crate::github_action::GithubActions;
 use crate::gitlab_ci::GitlabCI;
 use std::env;
 
@@ -9,7 +9,7 @@ pub(crate) trait Pipeline {
 }
 
 pub(crate) enum PipelineType {
-    GithubActions(GithubAction),
+    GithubActions(GithubActions),
     GitlabCI(GitlabCI),
     GitRepo(GitRepo),
 }
@@ -21,7 +21,7 @@ pub(crate) fn pipeline_type() -> PipelineType {
     if env::var(GITLAB_CI).map_or(false, |v| v == "true") {
         PipelineType::GitlabCI(GitlabCI)
     } else if env::var(GITHUB_ACTIONS).map_or(false, |v| v == "true") {
-        PipelineType::GithubActions(GithubAction)
+        PipelineType::GithubActions(GithubActions)
     } else {
         PipelineType::GitRepo(GitRepo)
     }

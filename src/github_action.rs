@@ -1,9 +1,9 @@
 use crate::pipeline::Pipeline;
 use std::env;
 
-pub(crate) struct GithubAction;
+pub(crate) struct GithubActions;
 
-impl Pipeline for GithubAction {
+impl Pipeline for GithubActions {
     fn branch_name(&self) -> String {
         env::var("GITHUB_REF_NAME").unwrap_or_else(|e| panic!("{}", e))
     }

@@ -18,7 +18,7 @@ pub(crate) fn latest_semantic_version_tag(repo: &Repository) -> Option<String> {
 
     tag_names
         .iter()
-        .filter_map(|t| t)
+        .flatten()
         .filter(|t| semantic_version_regex.is_match(t))
         .last()
         .map(|tag_name| tag_name.to_string())

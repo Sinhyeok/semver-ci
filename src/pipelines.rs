@@ -12,19 +12,19 @@ pub(crate) trait Pipeline {
     fn short_commit_sha(&self) -> String;
 }
 
-pub(crate) enum PipelineType {
+enum Pipelines {
     GithubActions(GithubActions),
     GitlabCI(GitlabCI),
     GitRepo(GitRepo),
 }
 
-fn pipeline_type() -> PipelineType {
+fn pipeline() -> Pipelines {
     if env::var(GITHUB_ACTIONS).map_or(false, |v| v == "true") {
-        PipelineType::GithubActions(GithubActions)
+        Pipelines::GithubActions(GithubActions)
     } else if env::var(GITLAB_CI).map_or(false, |v| v == "true") {
-        PipelineType::GitlabCI(GitlabCI)
+        Pipelines::GitlabCI(GitlabCI)
     } else {
-        PipelineType::GitRepo(GitRepo)
+        Pipelines::GitRepo(GitRepo)
     }
 }
 
@@ -43,9 +43,9 @@ impl PipelineInfo {
 }
 
 pub(crate) fn pipeline_info() -> PipelineInfo {
-    match pipeline_type() {
-        PipelineType::GithubActions(p) => PipelineInfo::new(&p),
-        PipelineType::GitlabCI(p) => PipelineInfo::new(&p),
-        PipelineType::GitRepo(p) => PipelineInfo::new(&p),
+    match pipeline() {
+        Pipelines::GithubActions(p) => PipelineInfo::new(&p),
+        Pipelines::GitlabCI(p) => PipelineInfo::new(&p),
+        Pipelines::GitRepo(p) => PipelineInfo::new(&p),
     }
 }

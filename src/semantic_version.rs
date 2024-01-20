@@ -20,7 +20,7 @@ impl SemanticVersion {
         self.patch += 1;
     }
 
-    pub fn increase_by_scope(&mut self, scope: String) {
+    pub fn increase_by_scope(&mut self, scope: String) -> &mut SemanticVersion {
         match scope.as_str() {
             "major" => self.increase_major(),
             "minor" => self.increase_minor(),
@@ -29,6 +29,8 @@ impl SemanticVersion {
                 panic!("Invalid scope: {}", scope)
             }
         }
+
+        self
     }
 
     pub fn from_string(version_string: String) -> Result<Self, String> {

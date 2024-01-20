@@ -31,8 +31,7 @@ fn version(scope: String, last_tag: String) -> String {
         }
     };
 
-    semantic_version.increase_by_scope(scope);
-    semantic_version.to_string(true)
+    semantic_version.increase_by_scope(scope).to_string(true)
 }
 
 fn metadata(branch_name: String, short_commit_sha: String) -> String {

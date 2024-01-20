@@ -5,6 +5,7 @@ use crate::{git_service, VersionArgs};
 use regex::Regex;
 
 const DEFAULT_SEMANTIC_VERSION_TAG: &str = "v0.0.0";
+const RELEASE_CANDIDATE_PATTERN: &str = r"^(release|hotfix)/.*$";
 
 pub(crate) fn run(args: &VersionArgs) {
     let scope = args.scope.clone();
@@ -35,12 +36,12 @@ fn version(scope: String, last_tag: String) -> String {
 }
 
 fn metadata(branch_name: String, short_commit_sha: String) -> String {
-    let release_candidate_pattern =
-        Regex::new(r"^(release|hotfix)/.*$").unwrap_or_else(|e| panic!("{}", e));
+    let release_candidate_regex =
+        Regex::new(RELEASE_CANDIDATE_PATTERN).unwrap_or_else(|e| panic!("{}", e));
 
     if branch_name == "develop" {
         format!("-dev.{}", short_commit_sha)
-    } else if release_candidate_pattern.is_match(&branch_name) {
+    } else if release_candidate_regex.is_match(&branch_name) {
         // TODO: Find "^v?(\d+\.\d+\.\d+)-rc\.\d+$" pattern tag and increase "rc\.\d+" number
         format!("-rc.{}", short_commit_sha)
     } else {

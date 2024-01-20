@@ -1,11 +1,9 @@
-use git2::{Error, Repository};
+use git2::Repository;
 use regex::Regex;
 
-pub(crate) fn open_repo() -> Result<Repository, Error> {
-    Repository::open(".")
-}
+pub(crate) fn last_semantic_version_tag() -> Option<String> {
+    let repo = Repository::open(".").unwrap_or_else(|e| panic!("Failed to open git repo: {}", e));
 
-pub(crate) fn latest_semantic_version_tag(repo: &Repository) -> Option<String> {
     let semantic_version_regex = Regex::new(r"^v?([0-9]+\.[0-9]+\.[0-9]+)$").unwrap();
 
     let tag_names = match repo.tag_names(None) {

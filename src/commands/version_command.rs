@@ -1,6 +1,7 @@
+use crate::commands::VersionArgs;
+use crate::git_service;
 use crate::pipelines;
 use crate::semantic_version::SemanticVersion;
-use crate::{git_service, VersionArgs};
 use regex::Regex;
 
 const DEFAULT_SEMANTIC_VERSION_TAG: &str = "v0.0.0";

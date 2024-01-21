@@ -40,6 +40,8 @@ pub(crate) fn branch_name() -> Result<String, Error> {
             Err(Error::from_str("Failed to retrieve branch name"))
         }
     } else {
-        Err(Error::from_str("HEAD is in detached state, not pointing to branch"))
+        Err(Error::from_str(
+            "HEAD is in detached state, not pointing to branch",
+        ))
     }
 }

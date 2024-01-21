@@ -16,7 +16,7 @@ stages:
 .upcoming_version:
   stage: before_build
   image:
-    name: tartar4s/semver-ci:v0.2.0
+    name: tartar4s/semver-ci
     entrypoint: [""]
   script:
     - echo "UPCOMING_VERSION=$(svci version)" >> version.env
@@ -49,13 +49,14 @@ build:
     - echo "$UPCOMING_VERSION"
 ```
 ### Git Repo
-**Warning** The Git HEAD must be pointing to the branch. If it's a detached head, semver-ci won't work because it can't find the target branch.
+> [!NOTE]
+> The Git HEAD must be pointing to the branch. If it's a detached head, semver-ci won't work because it can't find the target branch.
 ```shell
 # help
-docker run tartar4s/semver-ci:v0.1.0
+docker run tartar4s/semver-ci
 
 # version command
-docker run -v .:/app tartar4s/semver-ci:v0.1.0 version --help
+docker run -v .:/app tartar4s/semver-ci version --help
 ```
 
 ## Commands

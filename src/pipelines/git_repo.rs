@@ -9,6 +9,6 @@ impl Pipeline for GitRepo {
     }
 
     fn short_commit_sha(&self) -> String {
-        "git_repo_short_commit_sha".to_string()
+        git_service::short_commit_sha().unwrap_or_else(|e| panic!("{}", e))
     }
 }

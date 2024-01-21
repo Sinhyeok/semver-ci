@@ -3,12 +3,8 @@ use regex::Regex;
 
 const SEMANTIC_VERSION_TAG_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+)$";
 
-fn open_repo() -> Repository {
-    Repository::open(".").unwrap_or_else(|e| panic!("Failed to open git repo: {}", e))
-}
-
 pub(crate) fn last_semantic_version_tag(default: String) -> String {
-    let repo = open_repo();
+    let repo = Repository::open(".").unwrap_or_else(|e| panic!("Failed to open git repo: {}", e));
 
     let semantic_version_regex = Regex::new(SEMANTIC_VERSION_TAG_PATTERN).unwrap();
 
@@ -29,7 +25,7 @@ pub(crate) fn last_semantic_version_tag(default: String) -> String {
 }
 
 pub(crate) fn branch_name() -> Result<String, Error> {
-    let repo = open_repo();
+    let repo = Repository::open(".")?;
 
     let head = repo.head()?;
 
@@ -44,4 +40,12 @@ pub(crate) fn branch_name() -> Result<String, Error> {
             "HEAD is in detached state, not pointing to branch",
         ))
     }
+}
+
+pub(crate) fn short_commit_sha() -> Result<String, Error> {
+    let repo = Repository::open(".")?;
+
+    let commit_sha = repo.head()?.peel_to_commit()?.id().to_string();
+
+    Ok(commit_sha[..8].to_string())
 }

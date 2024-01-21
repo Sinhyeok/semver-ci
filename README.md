@@ -1,11 +1,28 @@
 ![lint workflow](https://github.com/Sinhyeok/semver-ci/actions/workflows/lint.yml/badge.svg)
+![publish workflow](https://github.com/Sinhyeok/semver-ci/actions/workflows/publish.yml/badge.svg)
 # semver-ci
 Semantic Versioning for CI/CD
 
 ## Getting Started
-```shell
-docker run -v .:/app tartar4s/semver-ci:v0.1.0 version
+### GitHub
+```yaml
 ```
+### GitLab
+```yaml
+```
+### Git Repo
+**Warning** The Git HEAD must be pointing to the branch. If it's a detached head, semver-ci won't work because it can't find the target branch.
+```shell
+# help
+docker run tartar4s/semver-ci:v0.1.0
+
+# version command
+docker run -v .:/app tartar4s/semver-ci:v0.1.0 version --help
+```
+
+## Commands
+### version
+Print upcoming version based on last semantic version tag and branch
 
 ## Development
 ### Install rustup

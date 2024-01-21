@@ -4,11 +4,49 @@
 Semantic Versioning for CI/CD
 
 ## Getting Started
-### GitHub
+### GitHub Actions
 ```yaml
 ```
-### GitLab
+### GitLab CI/CD
 ```yaml
+stages:
+  - before_build
+  - build
+
+.upcoming_version:
+  stage: before_build
+  image:
+    name: tartar4s/semver-ci:v0.2.0
+    entrypoint: [""]
+  script:
+    - echo "UPCOMING_VERSION=$(svci version)" >> version.env
+  artifacts:
+    reports:
+      dotenv: version.env
+
+upcoming_version:minor:
+  extends: .upcoming_version
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^(develop|feature\/.*|release\/[0-9]+\.[0-9]+\.x)$/
+
+upcoming_version:patch:
+  extends: .upcoming_version
+  variables:
+    SCOPE: patch
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^hotfix\/.*$/
+
+upcoming_version:major:
+  extends: .upcoming_version
+  variables:
+    SCOPE: major
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^release\/[0-9]+\.x\.x$/
+
+build:
+  stage: build
+  script:
+    - echo "$UPCOMING_VERSION"
 ```
 ### Git Repo
 **Warning** The Git HEAD must be pointing to the branch. If it's a detached head, semver-ci won't work because it can't find the target branch.

@@ -8,6 +8,7 @@ Semantic Versioning for CI/CD
 ```yaml
 ```
 ### GitLab CI/CD
+- [example](https://gitlab.com/attar.sh/semver-ci-example)
 ```yaml
 stages:
   - before_build

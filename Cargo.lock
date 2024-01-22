@@ -344,6 +344,7 @@ dependencies = [
  "clap",
  "dotenv",
  "git2",
+ "libz-sys",
  "regex",
 ]
 

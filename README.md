@@ -82,13 +82,26 @@ vi .env
 ```
 #### Example `.env`
 ```dotenv
+# Github
+## develop
 #GITHUB_ACTIONS=true
 #GITHUB_REF_NAME=develop
 #GITHUB_SHA=g9i8thubrt290384egrfy2837
 
+# GitLab
+## develop
 GITLAB_CI=true
 CI_COMMIT_BRANCH=develop
 CI_COMMIT_SHORT_SHA=g9i0tlab
+## hotfix
+#GITLAB_CI=true
+#CI_COMMIT_BRANCH=hotfix/0.2.34
+#CI_COMMIT_SHORT_SHA=b08640bd
+
+# Git Repo
+#GIT_SSH_KEY_PATH=$HOME/.ssh/id_rsa
+#GIT_SSH_KEY_PASSPHRASE={PASSWORD}
+#FORCE_FETCH_TAGS=true
 ```
 
 ### Run

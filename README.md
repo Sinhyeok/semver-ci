@@ -65,10 +65,10 @@ docker run -v .:/app tartar4s/semver-ci version --help
 Print upcoming version based on last semantic version tag and branch
 
 ## Development
-### Install rustup
+### Install rustup and cmake
 #### Mac
 ```shell
-brew install rustup
+brew install rustup cmake
 ```
 ### Setup Project
 ```shell
@@ -117,8 +117,7 @@ cargo run version --scope patch
 
 ### Install Lint Tools
 ```shell
-rustup component add clippy
-rustup component add rustfmt
+rustup component add clippy rustfmt
 ```
 ### Run lint
 ```shell

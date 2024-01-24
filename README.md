@@ -5,7 +5,67 @@ Semantic Versioning for CI/CD
 
 ## Getting Started
 ### GitHub Actions
+#### .github/workflows/upcoming_version_minor.yml
 ```yaml
+name: UPCOMING_VERSION_MINOR
+on:
+  push:
+    branches:
+      - 'develop'
+      - 'feature/*'
+      - 'release/[0-9]*.[0-9]*.x'
+jobs:
+  upcoming_version_minor:
+    runs-on: ubuntu-latest
+    container: tartar4s/semver-ci
+    steps:
+      - name: Check out the repository to the runner
+        uses: actions/checkout@v4
+      - run: git config --global --add safe.directory .
+      - name: Print upcoming version
+        run: svci version
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+#### .github/workflows/upcoming_version_patch.yml
+```yaml
+name: UPCOMING_VERSION_PATCH
+on:
+  push:
+    branches:
+      - 'hotfix/[0-9]*.[0-9]*.[0-9]*'
+jobs:
+  upcoming_version_patch:
+    runs-on: ubuntu-latest
+    container: tartar4s/semver-ci
+    steps:
+      - name: Check out the repository to the runner
+        uses: actions/checkout@v4
+      - run: git config --global --add safe.directory .
+      - name: Print upcoming version
+        run: svci version --scope patch
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+#### .github/workflows/upcoming_version_major.yml
+```yaml
+name: UPCOMING_VERSION_MAJOR
+on:
+  push:
+    branches:
+      - 'release/[0-9]*.x.x'
+jobs:
+  upcoming_version_major:
+    runs-on: ubuntu-latest
+    container: tartar4s/semver-ci
+    steps:
+      - name: Check out the repository to the runner
+        uses: actions/checkout@v4
+      - run: git config --global --add safe.directory .
+      - name: Print upcoming version
+        run: svci version --scope major
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 ### GitLab CI/CD
 - [example](https://gitlab.com/attar.sh/semver-ci-example)

@@ -5,9 +5,11 @@ Semantic Versioning for CI/CD
 
 ## Getting Started
 ### GitHub Actions
-#### .github/workflows/upcoming_version.yml
+- [example](https://github.com/Sinhyeok/semver-ci-example)
 ```yaml
-name: UPCOMING_VERSION
+# .github/workflows/build.yml
+
+name: BUILD
 on:
   push:
     branches:
@@ -20,28 +22,41 @@ jobs:
   upcoming_version:
     runs-on: ubuntu-latest
     container: tartar4s/semver-ci
+    outputs:
+      UPCOMING_VERSION: ${{ steps.set_upcoming_version.outputs.UPCOMING_VERSION }}
     steps:
       - name: Check out the repository to the runner
         uses: actions/checkout@v4
       - run: git config --global --add safe.directory .
-      - name: Print upcoming version
+      - name: Set upcoming version
+        id: set_upcoming_version
         run: |
           if [[ $GITHUB_REF == refs/heads/release/[0-9]*.x.x ]]; then
-            svci version --scope major
+            export SCOPE=major
           elif [[ $GITHUB_REF == refs/heads/develop || $GITHUB_REF == refs/heads/feature/* || $GITHUB_REF == refs/heads/release/[0-9]*.[0-9]*.x ]]; then
-            svci version
+            export SCOPE=minor
           elif [[ $GITHUB_REF == refs/heads/hotfix/* ]]; then
-            svci version --scope patch
+            export SCOPE=patch
           else
             echo "Unsupported branch for versioning"
             exit 1
           fi
+          echo "UPCOMING_VERSION=$(svci version)" >> "$GITHUB_OUTPUT"
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  build:
+    runs-on: ubuntu-latest
+    needs: upcoming_version
+    steps:
+      - env:
+          RELEASE_TAG: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
+        run: echo "$RELEASE_TAG"
 ```
 ### GitLab CI/CD
 - [example](https://gitlab.com/attar.sh/semver-ci-example)
 ```yaml
+# .gitlab-ci.yml
+
 stages:
   - before_build
   - build
@@ -78,8 +93,10 @@ upcoming_version:major:
 
 build:
   stage: build
+  variables:
+    RELEASE_TAG: $UPCOMING_VERSION
   script:
-    - echo "$UPCOMING_VERSION"
+    - echo "$RELEASE_TAG"
 ```
 ### Git Repo
 > [!NOTE]

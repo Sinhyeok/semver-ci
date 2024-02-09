@@ -5,37 +5,19 @@ Semantic Versioning for CI/CD
 
 ## Getting Started
 ### GitHub Actions
-#### .github/workflows/upcoming_version_minor.yml
+#### .github/workflows/upcoming_version.yml
 ```yaml
-name: UPCOMING_VERSION_MINOR
+name: UPCOMING_VERSION
 on:
   push:
     branches:
       - 'develop'
       - 'feature/*'
       - 'release/[0-9]*.[0-9]*.x'
-jobs:
-  upcoming_version_minor:
-    runs-on: ubuntu-latest
-    container: tartar4s/semver-ci
-    steps:
-      - name: Check out the repository to the runner
-        uses: actions/checkout@v4
-      - run: git config --global --add safe.directory .
-      - name: Print upcoming version
-        run: svci version
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
-#### .github/workflows/upcoming_version_patch.yml
-```yaml
-name: UPCOMING_VERSION_PATCH
-on:
-  push:
-    branches:
+      - 'release/[0-9]*.x.x'
       - 'hotfix/[0-9]*.[0-9]*.[0-9]*'
 jobs:
-  upcoming_version_patch:
+  upcoming_version:
     runs-on: ubuntu-latest
     container: tartar4s/semver-ci
     steps:
@@ -43,27 +25,17 @@ jobs:
         uses: actions/checkout@v4
       - run: git config --global --add safe.directory .
       - name: Print upcoming version
-        run: svci version --scope patch
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
-#### .github/workflows/upcoming_version_major.yml
-```yaml
-name: UPCOMING_VERSION_MAJOR
-on:
-  push:
-    branches:
-      - 'release/[0-9]*.x.x'
-jobs:
-  upcoming_version_major:
-    runs-on: ubuntu-latest
-    container: tartar4s/semver-ci
-    steps:
-      - name: Check out the repository to the runner
-        uses: actions/checkout@v4
-      - run: git config --global --add safe.directory .
-      - name: Print upcoming version
-        run: svci version --scope major
+        run: |
+          if [[ $GITHUB_REF == refs/heads/release/[0-9]*.x.x ]]; then
+            svci version --scope major
+          elif [[ $GITHUB_REF == refs/heads/develop || $GITHUB_REF == refs/heads/feature/* || $GITHUB_REF == refs/heads/release/[0-9]*.[0-9]*.x ]]; then
+            svci version
+          elif [[ $GITHUB_REF == refs/heads/hotfix/* ]]; then
+            svci version --scope patch
+          else
+            echo "Unsupported branch for versioning"
+            exit 1
+          fi
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```

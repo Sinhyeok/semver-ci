@@ -15,9 +15,8 @@ on:
     branches:
       - 'develop'
       - 'feature/*'
-      - 'release/[0-9]*.[0-9]*.x'
-      - 'release/[0-9]*.x.x'
-      - 'hotfix/[0-9]*.[0-9]*.[0-9]*'
+      - 'release/*'
+      - 'hotfix/*'
 jobs:
   upcoming_version:
     runs-on: ubuntu-latest
@@ -34,7 +33,7 @@ jobs:
         #export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
         #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
         run: |
-          export SCOPE=$(svci scope $CI_COMMIT_BRANCH)
+          export SCOPE=$(svci scope $GITHUB_REF_NAME)
           echo "UPCOMING_VERSION=$(svci version)" >> "$GITHUB_OUTPUT"
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -69,6 +68,8 @@ upcoming_version:
   artifacts:
     reports:
       dotenv: version.env
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^(develop|feature\/.+|release\/.+|hotfix\/.+)$/
 
 build:
   stage: build

@@ -1,0 +1,36 @@
+use clap::Args;
+use regex::Regex;
+
+#[derive(Args)]
+pub(crate) struct ScopeCommandArgs {
+    #[arg()]
+    pub(crate) branch_name: String,
+    #[arg(long, env, default_value = r"^release/[0-9]+.x.x$")]
+    pub(crate) major: String,
+    #[arg(
+        long,
+        env,
+        default_value = r"^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$"
+    )]
+    pub(crate) minor: String,
+    #[arg(long, env, default_value = r"^hotfix/[0-9]+.[0-9]+.[0-9]+$")]
+    pub(crate) patch: String,
+}
+
+pub(crate) fn run(args: ScopeCommandArgs) {
+    let major_regex = Regex::new(&args.major).unwrap_or_else(|e| panic!("{}", e));
+    let minor_regex = Regex::new(&args.minor).unwrap_or_else(|e| panic!("{}", e));
+    let patch_regex = Regex::new(&args.patch).unwrap_or_else(|e| panic!("{}", e));
+
+    let branch_name = &args.branch_name;
+
+    if major_regex.is_match(branch_name) {
+        println!("major")
+    } else if minor_regex.is_match(branch_name) {
+        println!("minor")
+    } else if patch_regex.is_match(branch_name) {
+        println!("patch")
+    } else {
+        panic!("Unknown branch name: {}", branch_name)
+    }
+}

@@ -4,17 +4,17 @@ use regex::Regex;
 #[derive(Args)]
 pub(crate) struct ScopeCommandArgs {
     #[arg()]
-    pub(crate) branch_name: String,
+    branch_name: String,
     #[arg(long, env, default_value = r"^release/[0-9]+.x.x$")]
-    pub(crate) major: String,
+    major: String,
     #[arg(
         long,
         env,
         default_value = r"^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$"
     )]
-    pub(crate) minor: String,
+    minor: String,
     #[arg(long, env, default_value = r"^hotfix/[0-9]+.[0-9]+.[0-9]+$")]
-    pub(crate) patch: String,
+    patch: String,
 }
 
 pub(crate) fn run(args: ScopeCommandArgs) {

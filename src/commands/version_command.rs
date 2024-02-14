@@ -11,7 +11,7 @@ const RELEASE_CANDIDATE_PATTERN: &str = r"^(release|hotfix)/.*$";
 #[derive(Args)]
 pub(crate) struct VersionCommandArgs {
     #[arg(short, long, env, default_value = "minor")]
-    pub(crate) scope: String,
+    scope: String,
 }
 
 pub(crate) fn run(args: VersionCommandArgs) {

@@ -8,13 +8,13 @@ mod version_command;
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
-pub(crate) struct Cli {
+struct Cli {
     #[command(subcommand)]
     pub(crate) command: Commands,
 }
 
 #[derive(Subcommand)]
-pub(crate) enum Commands {
+enum Commands {
     Version(VersionCommandArgs),
     Scope(ScopeCommandArgs),
 }

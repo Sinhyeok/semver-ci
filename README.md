@@ -30,17 +30,11 @@ jobs:
       - run: git config --global --add safe.directory .
       - name: Set upcoming version
         id: set_upcoming_version
+        #export MAJOR='^release/[0-9]+.x.x$'
+        #export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
+        #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
         run: |
-          if [[ $GITHUB_REF == refs/heads/release/[0-9]*.x.x ]]; then
-            export SCOPE=major
-          elif [[ $GITHUB_REF == refs/heads/develop || $GITHUB_REF == refs/heads/feature/* || $GITHUB_REF == refs/heads/release/[0-9]*.[0-9]*.x ]]; then
-            export SCOPE=minor
-          elif [[ $GITHUB_REF == refs/heads/hotfix/* ]]; then
-            export SCOPE=patch
-          else
-            echo "Unsupported branch for versioning"
-            exit 1
-          fi
+          export SCOPE=$(svci scope $CI_COMMIT_BRANCH)
           echo "UPCOMING_VERSION=$(svci version)" >> "$GITHUB_OUTPUT"
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -61,35 +55,20 @@ stages:
   - before_build
   - build
 
-.upcoming_version:
+upcoming_version:
   stage: before_build
   image:
     name: tartar4s/semver-ci
     entrypoint: [""]
   script:
+    #- export MAJOR='^release/[0-9]+.x.x$'
+    #- export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
+    #- export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
+    - export SCOPE=$(svci scope $CI_COMMIT_BRANCH)
     - echo "UPCOMING_VERSION=$(svci version)" >> version.env
   artifacts:
     reports:
       dotenv: version.env
-
-upcoming_version:minor:
-  extends: .upcoming_version
-  rules:
-    - if: $CI_COMMIT_BRANCH =~ /^(develop|feature\/.*|release\/[0-9]+\.[0-9]+\.x)$/
-
-upcoming_version:patch:
-  extends: .upcoming_version
-  variables:
-    SCOPE: patch
-  rules:
-    - if: $CI_COMMIT_BRANCH =~ /^hotfix\/.*$/
-
-upcoming_version:major:
-  extends: .upcoming_version
-  variables:
-    SCOPE: major
-  rules:
-    - if: $CI_COMMIT_BRANCH =~ /^release\/[0-9]+\.x\.x$/
 
 build:
   stage: build
@@ -112,6 +91,29 @@ docker run -v .:/app tartar4s/semver-ci version --help
 ## Commands
 ### version
 Print upcoming version based on last semantic version tag and branch
+```shell
+Usage: svci version [OPTIONS]
+
+Options:
+  -s, --scope <SCOPE>  [env: SCOPE=] [default: minor]
+  -h, --help           Print help
+  -V, --version        Print version
+```
+### scope
+Print scope based on branch name
+```shell
+Usage: svci scope [OPTIONS] <BRANCH_NAME>
+
+Arguments:
+  <BRANCH_NAME>  
+
+Options:
+      --major <MAJOR>  [env: MAJOR=] [default: ^release/[0-9]+.x.x$]
+      --minor <MINOR>  [env: MINOR=] [default: ^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$]
+      --patch <PATCH>  [env: PATCH=] [default: ^hotfix/[0-9]+.[0-9]+.[0-9]+$]
+  -h, --help           Print help
+  -V, --version        Print version
+```
 
 ## Development
 ### Install rustup and cmake

@@ -44,6 +44,13 @@ jobs:
       - env:
           RELEASE_TAG: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
         run: echo "$RELEASE_TAG"
+  tag:
+    runs-on: ubuntu-latest
+    needs: upcoming_version
+    steps:
+      - env:
+          TAG_NAME: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
+        run: svci tag "$TAG_NAME"
 ```
 ### GitLab CI/CD
 - [example](https://gitlab.com/attar.sh/semver-ci-example)
@@ -53,6 +60,7 @@ jobs:
 stages:
   - before_build
   - build
+  - after_build
 
 upcoming_version:
   stage: before_build
@@ -77,6 +85,16 @@ build:
     RELEASE_TAG: $UPCOMING_VERSION
   script:
     - echo "$RELEASE_TAG"
+  
+tag:
+  stage: after_build
+  image:
+    name: tartar4s/semver-ci
+    entrypoint: [""]
+  variables:
+    TAG_NAME: $UPCOMING_VERSION
+  script:
+    - svci tag "$TAG_NAME"
 ```
 ### Git Repo
 > [!NOTE]
@@ -90,6 +108,9 @@ docker run -v .:/app tartar4s/semver-ci version --help
 
 # scope command
 docker run -v .:/app tartar4s/semver-ci scope --help
+
+# tag command
+docker run -v .:/app tartar4s/semver-ci tag --help
 ```
 
 ## Commands
@@ -114,6 +135,19 @@ Options:
       --patch <PATCH>  [env: PATCH=] [default: ^hotfix/[0-9]+.[0-9]+.[0-9]+$]
   -h, --help           Print help
   -V, --version        Print version
+```
+### tag
+Create and push git tag to origin
+```shell
+Usage: svci tag [OPTIONS] <TAG_NAME>
+
+Arguments:
+  <TAG_NAME>  
+
+Options:
+  -s, --strip-prefix-v  [env: STRIP_PREFIX_V=]
+  -h, --help            Print help
+  -V, --version         Print version
 ```
 
 ## Development

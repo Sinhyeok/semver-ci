@@ -1,5 +1,8 @@
 use crate::pipelines;
-use git2::{Error, FetchOptions, RemoteCallbacks, Repository};
+use git2::{
+    Cred, CredentialType, Error, FetchOptions, ObjectType, Oid, PushOptions, RemoteCallbacks,
+    Repository,
+};
 use regex::Regex;
 use std::env;
 use std::path::Path;
@@ -55,26 +58,16 @@ pub(crate) fn short_commit_sha() -> Result<String, Error> {
     Ok(commit_sha[..8].to_string())
 }
 
+pub(crate) fn tag_and_push(tag_name: &str, tag_message: &str) -> Result<(), Error> {
+    let repo = Repository::open(".")?;
+    tag(&repo, tag_name, tag_message)?;
+    push_tag(&repo, tag_name)
+}
+
 fn fetch_tags(repo: &Repository, user: &str, token: &str) -> Result<(), Error> {
     let mut fetch_options = FetchOptions::new();
     let mut callbacks = RemoteCallbacks::new();
-
-    callbacks.credentials(|_url, username, cred| {
-        if cred.is_ssh_key() {
-            let ssh_username = username.unwrap_or(user);
-            git2::Cred::ssh_key(
-                ssh_username,
-                None,
-                Path::new(&ssh_key_path()),
-                ssh_key_passphrase().as_deref(),
-            )
-        } else if cred.is_user_pass_plaintext() {
-            let plain_username = username.unwrap_or(user);
-            git2::Cred::userpass_plaintext(plain_username, token)
-        } else {
-            panic!("Unexpected CredentialType: {:?}", cred)
-        }
-    });
+    callbacks.credentials(|_url, username, cred| git_auth_callback(cred, username, user, token));
 
     fetch_options.remote_callbacks(callbacks);
 
@@ -87,6 +80,28 @@ fn fetch_tags(repo: &Repository, user: &str, token: &str) -> Result<(), Error> {
     Ok(())
 }
 
+fn git_auth_callback(
+    cred: CredentialType,
+    username: Option<&str>,
+    user: &str,
+    token: &str,
+) -> Result<Cred, Error> {
+    if cred.is_ssh_key() {
+        let ssh_username = username.unwrap_or(user);
+        git2::Cred::ssh_key(
+            ssh_username,
+            None,
+            Path::new(&ssh_key_path()),
+            ssh_key_passphrase().as_deref(),
+        )
+    } else if cred.is_user_pass_plaintext() {
+        let plain_username = username.unwrap_or(user);
+        git2::Cred::userpass_plaintext(plain_username, token)
+    } else {
+        panic!("Unexpected CredentialType: {:?}", cred)
+    }
+}
+
 fn ssh_key_path() -> String {
     env::var("GIT_SSH_KEY_PATH").unwrap_or_else(|e| panic!("{}: \"GIT_SSH_KEY_PATH\"", e))
 }
@@ -96,4 +111,32 @@ fn ssh_key_passphrase() -> Option<String> {
         Ok(s) => Some(s),
         Err(_e) => None,
     }
+}
+
+fn tag(repo: &Repository, tag_name: &str, tag_message: &str) -> Result<Oid, Error> {
+    let head = repo.head()?;
+    let git_object = head.peel(ObjectType::Any)?;
+    let tagger = repo.signature().unwrap_or_else(|e| panic!("{}", e));
+
+    repo.tag(tag_name, &git_object, &tagger, tag_message, false)
+}
+
+fn push_tag(repo: &Repository, tag_name: &str) -> Result<(), Error> {
+    let mut push_options = PushOptions::new();
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(|_url, username, cred| {
+        let pipeline_info = pipelines::pipeline_info();
+        git_auth_callback(
+            cred,
+            username,
+            &pipeline_info.git_username,
+            &pipeline_info.git_token,
+        )
+    });
+
+    push_options.remote_callbacks(callbacks);
+
+    let ref_spec = format!("refs/tags/{}", tag_name);
+    repo.find_remote("origin")?
+        .push(&[ref_spec], Some(&mut push_options))
 }

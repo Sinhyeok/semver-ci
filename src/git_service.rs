@@ -64,6 +64,31 @@ pub(crate) fn tag_and_push(tag_name: &str, tag_message: &str) -> Result<(), Erro
     push_tag(&repo, tag_name)
 }
 
+pub(crate) fn get_config_value(name: &str) -> Option<String> {
+    let repo = match Repository::open(".") {
+        Ok(repo) => repo,
+        Err(_) => return None,
+    };
+
+    let config = match repo.config() {
+        Ok(config) => config,
+        Err(_) => return None,
+    };
+
+    let value = match config.get_entry(name) {
+        Ok(entry) => {
+            if let Some(username) = entry.value() {
+                Some(username.to_string())
+            } else {
+                None
+            }
+        }
+        Err(_) => None,
+    };
+
+    value
+}
+
 fn fetch_tags(repo: &Repository, user: &str, token: &str) -> Result<(), Error> {
     let mut fetch_options = FetchOptions::new();
     let mut callbacks = RemoteCallbacks::new();
@@ -88,7 +113,7 @@ fn git_auth_callback(
 ) -> Result<Cred, Error> {
     if cred.is_ssh_key() {
         let ssh_username = username.unwrap_or(user);
-        git2::Cred::ssh_key(
+        Cred::ssh_key(
             ssh_username,
             None,
             Path::new(&ssh_key_path()),
@@ -96,7 +121,7 @@ fn git_auth_callback(
         )
     } else if cred.is_user_pass_plaintext() {
         let plain_username = username.unwrap_or(user);
-        git2::Cred::userpass_plaintext(plain_username, token)
+        Cred::userpass_plaintext(plain_username, token)
     } else {
         panic!("Unexpected CredentialType: {:?}", cred)
     }
@@ -116,7 +141,8 @@ fn ssh_key_passphrase() -> Option<String> {
 fn tag(repo: &Repository, tag_name: &str, tag_message: &str) -> Result<Oid, Error> {
     let head = repo.head()?;
     let git_object = head.peel(ObjectType::Any)?;
-    let tagger = repo.signature().unwrap_or_else(|e| panic!("{}", e));
+    let pipeline_info = pipelines::pipeline_info();
+    let tagger = git2::Signature::now(&pipeline_info.git_username, &pipeline_info.git_email)?;
 
     repo.tag(tag_name, &git_object, &tagger, tag_message, false)
 }

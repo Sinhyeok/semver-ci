@@ -11,6 +11,7 @@ pub(crate) trait Pipeline {
     fn branch_name(&self) -> String;
     fn short_commit_sha(&self) -> String;
     fn git_username(&self) -> String;
+    fn git_email(&self) -> String;
     fn git_token(&self) -> String;
     fn force_fetch_tags(&self) -> bool {
         true
@@ -37,6 +38,7 @@ pub(crate) struct PipelineInfo {
     pub branch_name: String,
     pub short_commit_sha: String,
     pub git_username: String,
+    pub git_email: String,
     pub git_token: String,
     pub force_fetch_tags: bool,
 }
@@ -47,6 +49,7 @@ impl PipelineInfo {
             branch_name: pipeline.branch_name(),
             short_commit_sha: pipeline.short_commit_sha(),
             git_username: pipeline.git_username(),
+            git_email: pipeline.git_email(),
             git_token: pipeline.git_token(),
             force_fetch_tags: pipeline.force_fetch_tags(),
         }

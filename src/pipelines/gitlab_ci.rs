@@ -18,6 +18,10 @@ impl Pipeline for GitlabCI {
         "gitlab-ci-token".to_string()
     }
 
+    fn git_email(&self) -> String {
+        env::var("GITLAB_USER_EMAIL").unwrap_or_else(|e| panic!("{}: \"GITLAB_USER_EMAIL\"", e))
+    }
+
     fn git_token(&self) -> String {
         env::var("CI_JOB_TOKEN").unwrap_or_else(|e| panic!("{}: \"CI_JOB_TOKEN\"", e))
     }

@@ -16,7 +16,11 @@ impl Pipeline for GitRepo {
     }
 
     fn git_username(&self) -> String {
-        env::var("GIT_USERNAME").unwrap_or_else(|e| panic!("{}: \"GIT_USERNAME\"", e))
+        git_service::get_config_value("user.name").unwrap_or("".to_string())
+    }
+
+    fn git_email(&self) -> String {
+        git_service::get_config_value("user.email").unwrap_or("".to_string())
     }
 
     fn git_token(&self) -> String {

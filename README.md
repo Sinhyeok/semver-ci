@@ -26,13 +26,13 @@ jobs:
     steps:
       - name: Check out the repository to the runner
         uses: actions/checkout@v4
-      - run: git config --global --add safe.directory .
       - name: Set upcoming version
         id: set_upcoming_version
         #export MAJOR='^release/[0-9]+.x.x$'
         #export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
         #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
         run: |
+          git config --global --add safe.directory .
           export SCOPE=$(svci scope)
           echo "UPCOMING_VERSION=$(svci version)" >> "$GITHUB_OUTPUT"
     env:
@@ -41,16 +41,25 @@ jobs:
     runs-on: ubuntu-latest
     needs: upcoming_version
     steps:
-      - env:
-          RELEASE_TAG: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
-        run: echo "$RELEASE_TAG"
+      - run: echo "$RELEASE_TAG"
+    env:
+      RELEASE_TAG: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
   tag:
     runs-on: ubuntu-latest
-    needs: upcoming_version
+    container: tartar4s/semver-ci
+    needs: [upcoming_version, build]
+    permissions:
+      contents: write
     steps:
-      - env:
-          TAG_NAME: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
-        run: svci tag "$TAG_NAME"
+      - name: Check out the repository to the runner
+        uses: actions/checkout@v4
+      - name: Tag
+        run: |
+          git config --global --add safe.directory .
+          svci tag "$TAG_NAME"
+    env:
+      TAG_NAME: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 ### GitLab CI/CD
 - [example](https://gitlab.com/attar.sh/semver-ci-example)
@@ -85,16 +94,6 @@ build:
     RELEASE_TAG: $UPCOMING_VERSION
   script:
     - echo "$RELEASE_TAG"
-  
-tag:
-  stage: after_build
-  image:
-    name: tartar4s/semver-ci
-    entrypoint: [""]
-  variables:
-    TAG_NAME: $UPCOMING_VERSION
-  script:
-    - svci tag "$TAG_NAME"
 ```
 ### Git Repo
 > [!NOTE]

@@ -76,13 +76,7 @@ pub(crate) fn get_config_value(name: &str) -> Option<String> {
     };
 
     let value = match config.get_entry(name) {
-        Ok(entry) => {
-            if let Some(username) = entry.value() {
-                Some(username.to_string())
-            } else {
-                None
-            }
-        }
+        Ok(entry) => entry.value().map(|username| username.to_string()),
         Err(_) => None,
     };
 

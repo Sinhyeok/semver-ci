@@ -33,7 +33,7 @@ jobs:
         #export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
         #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
         run: |
-          export SCOPE=$(svci scope $GITHUB_REF_NAME)
+          export SCOPE=$(svci scope)
           echo "UPCOMING_VERSION=$(svci version)" >> "$GITHUB_OUTPUT"
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -63,7 +63,7 @@ upcoming_version:
     #- export MAJOR='^release/[0-9]+.x.x$'
     #- export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
     #- export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
-    - export SCOPE=$(svci scope $CI_COMMIT_BRANCH)
+    - export SCOPE=$(svci scope)
     - echo "UPCOMING_VERSION=$(svci version)" >> version.env
   artifacts:
     reports:
@@ -87,6 +87,9 @@ docker run tartar4s/semver-ci
 
 # version command
 docker run -v .:/app tartar4s/semver-ci version --help
+
+# scope command
+docker run -v .:/app tartar4s/semver-ci scope --help
 ```
 
 ## Commands
@@ -103,10 +106,7 @@ Options:
 ### scope
 Print scope based on branch name
 ```shell
-Usage: svci scope [OPTIONS] <BRANCH_NAME>
-
-Arguments:
-  <BRANCH_NAME>  
+Usage: svci scope [OPTIONS]
 
 Options:
       --major <MAJOR>  [env: MAJOR=] [default: ^release/[0-9]+.x.x$]

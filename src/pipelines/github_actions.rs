@@ -16,7 +16,7 @@ impl Pipeline for GithubActions {
     }
 
     fn git_username(&self) -> String {
-        "github-actions[bot]".to_string()
+        env::var("GITHUB_ACTOR").unwrap_or_else(|e| panic!("{}: \"GITHUB_ACTOR\"", e))
     }
 
     fn git_email(&self) -> String {

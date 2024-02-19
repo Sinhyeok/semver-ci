@@ -1,4 +1,4 @@
-use crate::pipelines;
+use crate::pipelines::PipelineInfo;
 use git2::{
     Cred, CredentialType, Error, FetchOptions, ObjectType, Oid, PushOptions, RemoteCallbacks,
     Repository,
@@ -9,12 +9,11 @@ use std::path::Path;
 
 const SEMANTIC_VERSION_TAG_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+)$";
 
-pub(crate) fn last_semantic_version_tag(default: String) -> String {
+pub(crate) fn last_semantic_version_tag(default: String, pipeline_info: &PipelineInfo) -> String {
     let repo = Repository::open(".").unwrap_or_else(|e| panic!("Failed to open git repo: {}", e));
 
     let semantic_version_regex = Regex::new(SEMANTIC_VERSION_TAG_PATTERN).unwrap();
 
-    let pipeline_info = pipelines::pipeline_info();
     if pipeline_info.force_fetch_tags {
         fetch_tags(&repo, &pipeline_info.git_username, &pipeline_info.git_token)
             .unwrap_or_else(|e| panic!("Failed to retrieve tags: {}", e));
@@ -58,10 +57,12 @@ pub(crate) fn short_commit_sha() -> Result<String, Error> {
     Ok(commit_sha[..8].to_string())
 }
 
-pub(crate) fn tag_and_push(tag_name: &str, tag_message: &str) -> Result<(), Error> {
+pub(crate) fn tag_and_push(
+    pipeline_info: &PipelineInfo,
+    tag_name: &str,
+    tag_message: &str,
+) -> Result<(), Error> {
     let repo = Repository::open(".")?;
-
-    let pipeline_info = pipelines::pipeline_info();
 
     tag(
         &repo,

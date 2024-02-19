@@ -1,3 +1,4 @@
+use crate::git_service;
 use crate::pipelines::Pipeline;
 use std::env;
 
@@ -6,6 +7,10 @@ pub(crate) struct GithubActions;
 pub const GITHUB_ACTIONS: &str = "GITHUB_ACTIONS";
 
 impl Pipeline for GithubActions {
+    fn init(&self) {
+        git_service::set_global_config_value("safe.directory", ".").unwrap();
+    }
+
     fn branch_name(&self) -> String {
         env::var("GITHUB_REF_NAME").unwrap_or_else(|e| panic!("{}: \"GITHUB_REF_NAME\"", e))
     }

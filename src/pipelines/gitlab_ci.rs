@@ -23,6 +23,8 @@ impl Pipeline for GitlabCI {
     }
 
     fn git_token(&self) -> String {
-        env::var("CI_JOB_TOKEN").unwrap_or_else(|e| panic!("{}: \"CI_JOB_TOKEN\"", e))
+        env::var("SEMVER_CI_TOKEN").unwrap_or(
+            env::var("CI_JOB_TOKEN").unwrap_or_else(|e| panic!("{}: \"CI_JOB_TOKEN\"", e)),
+        )
     }
 }

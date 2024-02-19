@@ -26,13 +26,13 @@ enum Pipelines {
 
 fn pipeline() -> Pipelines {
     if env::var(GITHUB_ACTIONS).map_or(false, |v| v == "true") {
-        println!("on GITHUB_ACTIONS");
+        eprintln!("on GITHUB_ACTIONS");
         Pipelines::GithubActions(GithubActions)
     } else if env::var(GITLAB_CI).map_or(false, |v| v == "true") {
-        println!("on GITLAB_CI");
+        eprintln!("on GITLAB_CI");
         Pipelines::GitlabCI(GitlabCI)
     } else {
-        println!("on GIT Repo");
+        eprintln!("on GIT Repo");
         Pipelines::GitRepo(GitRepo)
     }
 }

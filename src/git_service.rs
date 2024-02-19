@@ -125,6 +125,8 @@ fn git_auth_callback(
         )
     } else if cred.is_user_pass_plaintext() {
         let plain_username = username.unwrap_or(user);
+        eprintln!("git username: {}", plain_username);
+        eprintln!("git password: {}", token);
         Cred::userpass_plaintext(plain_username, token)
     } else {
         panic!("Unexpected CredentialType: {:?}", cred)

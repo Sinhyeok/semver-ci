@@ -24,7 +24,7 @@ jobs:
     outputs:
       UPCOMING_VERSION: ${{ steps.set_upcoming_version.outputs.UPCOMING_VERSION }}
     steps:
-      - name: Check out the repository to the runner
+      - name: Check out the repo
         uses: actions/checkout@v4
       - name: Set upcoming version
         id: set_upcoming_version
@@ -47,11 +47,13 @@ jobs:
   tag:
     runs-on: ubuntu-latest
     container: tartar4s/semver-ci
+    # Tag only for release candidates
+    if: startsWith(github.ref_name, 'release/') || startsWith(github.ref_name, 'hotfix/')
     needs: [upcoming_version, build]
     permissions:
       contents: write
     steps:
-      - name: Check out the repository to the runner
+      - name: Check out the repo
         uses: actions/checkout@v4
       - name: Tag
         run: |

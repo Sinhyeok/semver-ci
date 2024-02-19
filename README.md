@@ -9,7 +9,8 @@ Semantic Versioning for CI/CD
 ```yaml
 # .github/workflows/build.yml
 
-name: BUILD
+name: Build
+
 on:
   push:
     branches:
@@ -17,6 +18,7 @@ on:
       - 'feature/*'
       - 'release/*'
       - 'hotfix/*'
+
 jobs:
   upcoming_version:
     runs-on: ubuntu-latest

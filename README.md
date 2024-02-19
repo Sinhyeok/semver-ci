@@ -28,9 +28,9 @@ jobs:
         uses: actions/checkout@v4
       - name: Set upcoming version
         id: set_upcoming_version
-        #export MAJOR='^release/[0-9]+.x.x$'
-        #export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
-        #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
+          #export MAJOR='^release/[0-9]+.x.x$'
+          #export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
+          #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
         run: |
           git config --global --add safe.directory .
           export SCOPE=$(svci scope)
@@ -71,6 +71,7 @@ jobs:
 stages:
   - before_build
   - build
+  - after_build
 
 upcoming_version:
   stage: before_build
@@ -78,11 +79,12 @@ upcoming_version:
     name: tartar4s/semver-ci
     entrypoint: [""]
   script:
-    #- export MAJOR='^release/[0-9]+.x.x$'
-    #- export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
-    #- export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
-    - export SCOPE=$(svci scope)
-    - echo "UPCOMING_VERSION=$(svci version)" >> version.env
+      #export MAJOR='^release/[0-9]+.x.x$'
+      #export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
+      #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
+    - |
+      export SCOPE=$(svci scope)
+      echo "UPCOMING_VERSION=$(svci version)" >> version.env
   artifacts:
     reports:
       dotenv: version.env
@@ -95,6 +97,23 @@ build:
     RELEASE_TAG: $UPCOMING_VERSION
   script:
     - echo "$RELEASE_TAG"
+  rules:
+    - if: $CI_COMMIT_BRANCH
+
+# "SEMVER_CI_TOKEN" with read_repository/write_repository permissions must be set in CI/CD variables
+tag:
+  stage: after_build
+  image:
+    name: tartar4s/semver-ci
+    entrypoint: [""]
+  variables:
+    TAG_NAME: $UPCOMING_VERSION
+  script:
+    - |
+      git remote set-url origin $CI_PROJECT_URL.git
+      svci tag $TAG_NAME
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^(release\/.+|hotfix\/.+)$/
 ```
 ### Git Repo
 > [!NOTE]

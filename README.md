@@ -199,6 +199,10 @@ vi .env
 GITLAB_CI=true
 CI_COMMIT_BRANCH=develop
 CI_COMMIT_SHORT_SHA=g9i0tlab
+GITLAB_USER_EMAIL=user@mail.com
+SEMVER_CI_TOKEN=glpat_908d21yh0ewfd98h
+CI_JOB_TOKEN=vn0w9e7dfgy97esd8f
+CI_PROJECT_URL=https://gitlab.com/attar.sh/semver-ci
 ## hotfix
 #GITLAB_CI=true
 #CI_COMMIT_BRANCH=hotfix/0.2.34
@@ -206,7 +210,7 @@ CI_COMMIT_SHORT_SHA=g9i0tlab
 
 # Git Repo
 #GIT_SSH_KEY_PATH=$HOME/.ssh/id_rsa
-#GIT_SSH_KEY_PASSPHRASE={PASSWORD}
+#GIT_SSH_KEY_PASSPHRASE={YOUR_PASSWORD}
 #FORCE_FETCH_TAGS=true
 ```
 

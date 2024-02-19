@@ -51,7 +51,7 @@ jobs:
           context: .
           file: ./debug.Dockerfile
           push: true
-          tags: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
+          tags: tartar4s/semver-ci:${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
           labels: ${{ steps.meta.outputs.labels }}
   tag:
     runs-on: ubuntu-latest

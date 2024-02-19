@@ -98,6 +98,13 @@ pub(crate) fn get_config_value(name: &str) -> Option<String> {
     value
 }
 
+pub(crate) fn set_config_value(name: &str, value: &str) -> Result<(), Error> {
+    let repo = Repository::open(".")?;
+
+    let mut config = repo.config()?;
+    config.set_str(name, value)
+}
+
 fn fetch_tags(repo: &Repository, user: &str, token: &str) -> Result<(), Error> {
     let mut fetch_options = FetchOptions::new();
     let mut callbacks = RemoteCallbacks::new();

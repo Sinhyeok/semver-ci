@@ -104,13 +104,8 @@ fn fetch_tags(repo: &Repository, user: &str, token: &str) -> Result<(), Error> {
 
     fetch_options.remote_callbacks(callbacks);
 
-    repo.find_remote("origin")?.fetch(
-        &["refs/tags/*:refs/tags/*"],
-        Some(&mut fetch_options),
-        None,
-    )?;
-
-    Ok(())
+    repo.find_remote("origin")?
+        .fetch(&["refs/tags/*:refs/tags/*"], Some(&mut fetch_options), None)
 }
 
 fn git_auth_callback(

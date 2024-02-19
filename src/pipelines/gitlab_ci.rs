@@ -7,6 +7,19 @@ pub(crate) struct GitlabCI;
 pub const GITLAB_CI: &str = "GITLAB_CI";
 
 impl Pipeline for GitlabCI {
+    fn init(&self) {
+        match env::var("CI_PROJECT_URL") {
+            Ok(project_url) => {
+                git_service::set_config_value(
+                    "remote.origin.pushurl",
+                    &format!("{}.git", project_url),
+                )
+                .unwrap_or_else(|e| panic!("{}", e));
+            }
+            Err(e) => panic!("{}: CI_PROJECT_URL", e),
+        }
+    }
+
     fn branch_name(&self) -> String {
         env::var("CI_COMMIT_BRANCH").unwrap_or_else(|e| panic!("{}: \"CI_COMMIT_BRANCH\"", e))
     }
@@ -24,17 +37,6 @@ impl Pipeline for GitlabCI {
     }
 
     fn git_token(&self) -> String {
-        match env::var("CI_PROJECT_URL") {
-            Ok(project_url) => {
-                git_service::set_config_value(
-                    "remote.origin.pushurl",
-                    &format!("{}.git", project_url),
-                )
-                .unwrap_or_else(|e| panic!("{}", e));
-            }
-            Err(e) => panic!("{}: CI_PROJECT_URL", e),
-        }
-
         env::var("SEMVER_CI_TOKEN").unwrap_or(
             env::var("CI_JOB_TOKEN").unwrap_or_else(|e| panic!("{}: \"CI_JOB_TOKEN\"", e)),
         )

@@ -8,6 +8,7 @@ use crate::pipelines::gitlab_ci::{GitlabCI, GITLAB_CI};
 use std::env;
 
 pub(crate) trait Pipeline {
+    fn init(&self) {}
     fn branch_name(&self) -> String;
     fn short_commit_sha(&self) -> String;
     fn git_username(&self) -> String;
@@ -48,6 +49,8 @@ pub(crate) struct PipelineInfo {
 
 impl PipelineInfo {
     fn new(pipeline: &dyn Pipeline) -> PipelineInfo {
+        pipeline.init();
+
         PipelineInfo {
             branch_name: pipeline.branch_name(),
             short_commit_sha: pipeline.short_commit_sha(),

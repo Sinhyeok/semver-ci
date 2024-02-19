@@ -71,7 +71,6 @@ jobs:
 stages:
   - before_build
   - build
-  - after_build
 
 upcoming_version:
   stage: before_build

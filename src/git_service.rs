@@ -60,8 +60,22 @@ pub(crate) fn short_commit_sha() -> Result<String, Error> {
 
 pub(crate) fn tag_and_push(tag_name: &str, tag_message: &str) -> Result<(), Error> {
     let repo = Repository::open(".")?;
-    tag(&repo, tag_name, tag_message)?;
-    push_tag(&repo, tag_name)
+
+    let pipeline_info = pipelines::pipeline_info();
+
+    tag(
+        &repo,
+        tag_name,
+        tag_message,
+        &pipeline_info.git_username,
+        &pipeline_info.git_email,
+    )?;
+    push_tag(
+        &repo,
+        tag_name,
+        &pipeline_info.git_username,
+        &pipeline_info.git_token,
+    )
 }
 
 pub(crate) fn get_config_value(name: &str) -> Option<String> {
@@ -132,27 +146,24 @@ fn ssh_key_passphrase() -> Option<String> {
     }
 }
 
-fn tag(repo: &Repository, tag_name: &str, tag_message: &str) -> Result<Oid, Error> {
+fn tag(
+    repo: &Repository,
+    tag_name: &str,
+    tag_message: &str,
+    user: &str,
+    email: &str,
+) -> Result<Oid, Error> {
     let head = repo.head()?;
     let git_object = head.peel(ObjectType::Any)?;
-    let pipeline_info = pipelines::pipeline_info();
-    let tagger = git2::Signature::now(&pipeline_info.git_username, &pipeline_info.git_email)?;
+    let tagger = git2::Signature::now(user, email)?;
 
     repo.tag(tag_name, &git_object, &tagger, tag_message, false)
 }
 
-fn push_tag(repo: &Repository, tag_name: &str) -> Result<(), Error> {
+fn push_tag(repo: &Repository, tag_name: &str, user: &str, token: &str) -> Result<(), Error> {
     let mut push_options = PushOptions::new();
     let mut callbacks = RemoteCallbacks::new();
-    callbacks.credentials(|_url, username, cred| {
-        let pipeline_info = pipelines::pipeline_info();
-        git_auth_callback(
-            cred,
-            username,
-            &pipeline_info.git_username,
-            &pipeline_info.git_token,
-        )
-    });
+    callbacks.credentials(|_url, username, cred| git_auth_callback(cred, username, user, token));
 
     push_options.remote_callbacks(callbacks);
 

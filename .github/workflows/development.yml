@@ -2,6 +2,9 @@ on:
   push:
     branches-ignore:
       - 'main'
+    paths-ignore:
+      - 'README.md'
+      - 'LICENSE'
 
 name: Publish
 

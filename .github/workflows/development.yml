@@ -6,7 +6,7 @@ on:
       - '**/README.md'
       - '**/LICENSE'
 
-name: Publish
+name: Development
 
 jobs:
   lint:

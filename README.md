@@ -109,9 +109,7 @@ tag:
   variables:
     TAG_NAME: $UPCOMING_VERSION
   script:
-    - |
-      git remote set-url origin $CI_PROJECT_URL.git
-      svci tag $TAG_NAME
+    - svci tag $TAG_NAME
   rules:
     - if: $CI_COMMIT_BRANCH =~ /^(release\/.+|hotfix\/.+)$/
 ```
@@ -164,9 +162,10 @@ Arguments:
   <TAG_NAME>  
 
 Options:
-  -s, --strip-prefix-v  [env: STRIP_PREFIX_V=]
-  -h, --help            Print help
-  -V, --version         Print version
+      --tag-message <TAG_MESSAGE>  [env: TAG_MESSAGE=] [default: ]
+  -s, --strip-prefix-v             [env: STRIP_PREFIX_V=]
+  -h, --help                       Print help
+  -V, --version                    Print version
 ```
 
 ## Development

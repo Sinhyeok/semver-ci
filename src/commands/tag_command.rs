@@ -5,6 +5,8 @@ use clap::Args;
 pub(crate) struct TagCommandArgs {
     #[arg()]
     tag_name: String,
+    #[arg(long, env, default_value="")]
+    tag_message: String,
     #[arg(short, long, env, action)]
     strip_prefix_v: bool,
 }
@@ -17,5 +19,7 @@ pub(crate) fn run(args: TagCommandArgs) {
         tag_name = tag_name.strip_prefix('v').unwrap()
     };
 
-    git_service::tag_and_push(&pipeline_info, tag_name, "").unwrap_or_else(|e| panic!("{}", e));
+    let tag_message = args.tag_message.as_str();
+
+    git_service::tag_and_push(&pipeline_info, tag_name, tag_message).unwrap_or_else(|e| panic!("{}", e));
 }

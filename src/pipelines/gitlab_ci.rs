@@ -15,7 +15,7 @@ impl Pipeline for GitlabCI {
     }
 
     fn git_username(&self) -> String {
-        "gitlab-ci-token".to_string()
+        env::var("SEMVER_CI_USERNAME").unwrap_or("gitlab-ci-token".to_string())
     }
 
     fn git_email(&self) -> String {

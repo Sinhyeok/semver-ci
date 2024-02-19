@@ -32,11 +32,11 @@ jobs:
           #export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
           #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
         run: |
-          git config --global --add safe.directory .
           export SCOPE=$(svci scope)
           echo "UPCOMING_VERSION=$(svci version)" >> "$GITHUB_OUTPUT"
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build:
     runs-on: ubuntu-latest
     needs: upcoming_version
@@ -44,10 +44,10 @@ jobs:
       - run: echo "$RELEASE_TAG"
     env:
       RELEASE_TAG: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
+
   tag:
     runs-on: ubuntu-latest
     container: tartar4s/semver-ci
-    # Tag only for release candidates
     if: startsWith(github.ref_name, 'release/') || startsWith(github.ref_name, 'hotfix/')
     needs: [upcoming_version, build]
     permissions:
@@ -56,15 +56,15 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
       - name: Tag
-        run: |
-          git config --global --add safe.directory .
-          svci tag "$TAG_NAME"
+        run: svci tag "$TAG_NAME"
     env:
       TAG_NAME: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 ### GitLab CI/CD
 - [example](https://gitlab.com/attar.sh/semver-ci-example)
+> [!NOTE]
+> For tagging, "SEMVER_CI_TOKEN" with read_repository/write_repository permissions must be set in CI/CD variables 
 ```yaml
 # .gitlab-ci.yml
 

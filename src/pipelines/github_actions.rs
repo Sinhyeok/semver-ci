@@ -1,3 +1,4 @@
+use crate::git_service;
 use crate::pipelines::Pipeline;
 use std::env;
 
@@ -6,6 +7,10 @@ pub(crate) struct GithubActions;
 pub const GITHUB_ACTIONS: &str = "GITHUB_ACTIONS";
 
 impl Pipeline for GithubActions {
+    fn init(&self) {
+        git_service::set_global_config_value("safe.directory", ".").unwrap();
+    }
+
     fn branch_name(&self) -> String {
         env::var("GITHUB_REF_NAME").unwrap_or_else(|e| panic!("{}: \"GITHUB_REF_NAME\"", e))
     }
@@ -17,6 +22,10 @@ impl Pipeline for GithubActions {
 
     fn git_username(&self) -> String {
         env::var("GITHUB_ACTOR").unwrap_or_else(|e| panic!("{}: \"GITHUB_ACTOR\"", e))
+    }
+
+    fn git_email(&self) -> String {
+        "41898282+github-actions[bot]@users.noreply.github.com".to_string()
     }
 
     fn git_token(&self) -> String {

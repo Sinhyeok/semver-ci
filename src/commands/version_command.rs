@@ -11,14 +11,17 @@ const RELEASE_CANDIDATE_PATTERN: &str = r"^(release|hotfix)/.*$";
 #[derive(Args)]
 pub(crate) struct VersionCommandArgs {
     #[arg(short, long, env, default_value = "minor")]
-    pub(crate) scope: String,
+    scope: String,
 }
 
 pub(crate) fn run(args: VersionCommandArgs) {
-    let last_tag = git_service::last_semantic_version_tag(DEFAULT_SEMANTIC_VERSION_TAG.to_string());
+    let pipeline_info = pipelines::pipeline_info();
+    let last_tag = git_service::last_semantic_version_tag(
+        DEFAULT_SEMANTIC_VERSION_TAG.to_string(),
+        &pipeline_info,
+    );
     let version = version(args.scope, last_tag);
 
-    let pipeline_info = pipelines::pipeline_info();
     let metadata = metadata(pipeline_info.branch_name, pipeline_info.short_commit_sha);
 
     println!("{}{}", version, metadata)

@@ -9,7 +9,8 @@ Semantic Versioning for CI/CD
 ```yaml
 # .github/workflows/build.yml
 
-name: BUILD
+name: Build
+
 on:
   push:
     branches:
@@ -17,6 +18,7 @@ on:
       - 'feature/*'
       - 'release/*'
       - 'hotfix/*'
+
 jobs:
   upcoming_version:
     runs-on: ubuntu-latest
@@ -24,35 +26,54 @@ jobs:
     outputs:
       UPCOMING_VERSION: ${{ steps.set_upcoming_version.outputs.UPCOMING_VERSION }}
     steps:
-      - name: Check out the repository to the runner
+      - name: Check out the repo
         uses: actions/checkout@v4
-      - run: git config --global --add safe.directory .
       - name: Set upcoming version
         id: set_upcoming_version
-        #export MAJOR='^release/[0-9]+.x.x$'
-        #export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
-        #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
+          #export MAJOR='^release/[0-9]+.x.x$'
+          #export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
+          #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
         run: |
-          export SCOPE=$(svci scope $GITHUB_REF_NAME)
+          export SCOPE=$(svci scope)
           echo "UPCOMING_VERSION=$(svci version)" >> "$GITHUB_OUTPUT"
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build:
     runs-on: ubuntu-latest
     needs: upcoming_version
     steps:
-      - env:
-          RELEASE_TAG: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
-        run: echo "$RELEASE_TAG"
+      - run: echo "$RELEASE_TAG"
+    env:
+      RELEASE_TAG: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
+
+  tag:
+    runs-on: ubuntu-latest
+    container: tartar4s/semver-ci
+    if: startsWith(github.ref_name, 'release/') || startsWith(github.ref_name, 'hotfix/')
+    needs: [upcoming_version, build]
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      - name: Tag
+        run: svci tag "$TAG_NAME"
+    env:
+      TAG_NAME: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 ### GitLab CI/CD
 - [example](https://gitlab.com/attar.sh/semver-ci-example)
+> [!NOTE]
+> For tagging, "SEMVER_CI_TOKEN" with read_repository/write_repository permissions must be set in CI/CD variables 
 ```yaml
 # .gitlab-ci.yml
 
 stages:
   - before_build
   - build
+  - after_build
 
 upcoming_version:
   stage: before_build
@@ -60,11 +81,12 @@ upcoming_version:
     name: tartar4s/semver-ci
     entrypoint: [""]
   script:
-    #- export MAJOR='^release/[0-9]+.x.x$'
-    #- export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
-    #- export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
-    - export SCOPE=$(svci scope $CI_COMMIT_BRANCH)
-    - echo "UPCOMING_VERSION=$(svci version)" >> version.env
+      #export MAJOR='^release/[0-9]+.x.x$'
+      #export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
+      #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
+    - |
+      export SCOPE=$(svci scope)
+      echo "UPCOMING_VERSION=$(svci version)" >> version.env
   artifacts:
     reports:
       dotenv: version.env
@@ -77,6 +99,21 @@ build:
     RELEASE_TAG: $UPCOMING_VERSION
   script:
     - echo "$RELEASE_TAG"
+  rules:
+    - if: $CI_COMMIT_BRANCH
+
+# "SEMVER_CI_TOKEN" with read_repository/write_repository permissions must be set in CI/CD variables
+tag:
+  stage: after_build
+  image:
+    name: tartar4s/semver-ci
+    entrypoint: [""]
+  variables:
+    TAG_NAME: $UPCOMING_VERSION
+  script:
+    - svci tag $TAG_NAME
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^(release\/.+|hotfix\/.+)$/
 ```
 ### Git Repo
 > [!NOTE]
@@ -87,6 +124,12 @@ docker run tartar4s/semver-ci
 
 # version command
 docker run -v .:/app tartar4s/semver-ci version --help
+
+# scope command
+docker run -v .:/app tartar4s/semver-ci scope --help
+
+# tag command
+docker run -v .:/app tartar4s/semver-ci tag --help
 ```
 
 ## Commands
@@ -103,10 +146,7 @@ Options:
 ### scope
 Print scope based on branch name
 ```shell
-Usage: svci scope [OPTIONS] <BRANCH_NAME>
-
-Arguments:
-  <BRANCH_NAME>  
+Usage: svci scope [OPTIONS]
 
 Options:
       --major <MAJOR>  [env: MAJOR=] [default: ^release/[0-9]+.x.x$]
@@ -114,6 +154,20 @@ Options:
       --patch <PATCH>  [env: PATCH=] [default: ^hotfix/[0-9]+.[0-9]+.[0-9]+$]
   -h, --help           Print help
   -V, --version        Print version
+```
+### tag
+Create and push git tag to origin
+```shell
+Usage: svci tag [OPTIONS] <TAG_NAME>
+
+Arguments:
+  <TAG_NAME>  
+
+Options:
+      --tag-message <TAG_MESSAGE>  [env: TAG_MESSAGE=] [default: ]
+  -s, --strip-prefix-v             [env: STRIP_PREFIX_V=]
+  -h, --help                       Print help
+  -V, --version                    Print version
 ```
 
 ## Development
@@ -145,6 +199,10 @@ vi .env
 GITLAB_CI=true
 CI_COMMIT_BRANCH=develop
 CI_COMMIT_SHORT_SHA=g9i0tlab
+GITLAB_USER_EMAIL=user@mail.com
+SEMVER_CI_TOKEN=glpat_908d21yh0ewfd98h
+CI_JOB_TOKEN=vn0w9e7dfgy97esd8f
+CI_PROJECT_URL=https://gitlab.com/attar.sh/semver-ci
 ## hotfix
 #GITLAB_CI=true
 #CI_COMMIT_BRANCH=hotfix/0.2.34
@@ -152,7 +210,7 @@ CI_COMMIT_SHORT_SHA=g9i0tlab
 
 # Git Repo
 #GIT_SSH_KEY_PATH=$HOME/.ssh/id_rsa
-#GIT_SSH_KEY_PASSPHRASE={PASSWORD}
+#GIT_SSH_KEY_PASSPHRASE={YOUR_PASSWORD}
 #FORCE_FETCH_TAGS=true
 ```
 

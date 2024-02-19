@@ -73,9 +73,9 @@ pub(crate) fn tag_and_push(
     )?;
     push_tag(
         &repo,
-        tag_name,
         &pipeline_info.git_username,
         &pipeline_info.git_token,
+        tag_name,
     )
 }
 
@@ -163,7 +163,7 @@ fn tag(
     repo.tag(tag_name, &git_object, &tagger, tag_message, false)
 }
 
-fn push_tag(repo: &Repository, tag_name: &str, user: &str, token: &str) -> Result<(), Error> {
+fn push_tag(repo: &Repository, user: &str, token: &str, tag_name: &str) -> Result<(), Error> {
     let mut push_options = PushOptions::new();
     let mut callbacks = RemoteCallbacks::new();
     callbacks.credentials(|_url, username, cred| git_auth_callback(cred, username, user, token));

@@ -1,7 +1,7 @@
 use crate::pipelines::PipelineInfo;
 use git2::{
-    Config, Cred, CredentialType, Error, FetchOptions, ObjectType, Oid, PushOptions,
-    RemoteCallbacks, Repository,
+    Cred, CredentialType, Error, FetchOptions, ObjectType, Oid, PushOptions, RemoteCallbacks,
+    Repository,
 };
 use regex::Regex;
 use std::env;

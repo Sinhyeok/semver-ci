@@ -1,7 +1,7 @@
 use crate::pipelines::PipelineInfo;
 use git2::{
-    Cred, CredentialType, Error, FetchOptions, ObjectType, Oid, PushOptions, RemoteCallbacks,
-    Repository,
+    Config, Cred, CredentialType, Error, FetchOptions, ObjectType, Oid, PushOptions,
+    RemoteCallbacks, Repository,
 };
 use regex::Regex;
 use std::env;
@@ -102,6 +102,11 @@ pub(crate) fn set_config_value(name: &str, value: &str) -> Result<(), Error> {
     let repo = Repository::open(".")?;
 
     let mut config = repo.config()?;
+    config.set_str(name, value)
+}
+
+pub(crate) fn set_global_config_value(name: &str, value: &str) -> Result<(), Error> {
+    let mut config = Config::open_default()?;
     config.set_str(name, value)
 }
 

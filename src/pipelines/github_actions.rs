@@ -22,6 +22,9 @@ impl Pipeline for GithubActions {
             &self.git_token(),
         )
         .unwrap_or_else(|e| panic!("{}", e));
+
+        // Git config: "safe.directory=."
+        git_service::set_global_config_value("safe.directory", ".").unwrap();
     }
 
     fn branch_name(&self) -> String {

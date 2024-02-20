@@ -26,8 +26,6 @@ jobs:
     outputs:
       UPCOMING_VERSION: ${{ steps.set_upcoming_version.outputs.UPCOMING_VERSION }}
     steps:
-      - name: Check out the repo
-        uses: actions/checkout@v4
       - name: Set upcoming version
         id: set_upcoming_version
           #export MAJOR='^release/[0-9]+.x.x$'
@@ -55,8 +53,6 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Check out the repo
-        uses: actions/checkout@v4
       - name: Tag
         run: svci tag "$TAG_NAME"
     env:
@@ -193,6 +189,10 @@ vi .env
 #GITHUB_ACTIONS=true
 #GITHUB_REF_NAME=develop
 #GITHUB_SHA=g9i8thubrt290384egrfy2837
+#GITHUB_ACTOR=Sinhyeok
+#GITHUB_TOKEN=github_pat_asd897fytaw7890efh2394hef9asdhp9fas8ydfh
+#GITHUB_SERVER_URL=https://github.com
+#GITHUB_REPOSITORY=Sinhyeok/semver-ci
 
 # GitLab
 ## develop

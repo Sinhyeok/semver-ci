@@ -8,7 +8,23 @@ pub const GITHUB_ACTIONS: &str = "GITHUB_ACTIONS";
 
 impl Pipeline for GithubActions {
     fn init(&self) {
+        // Git config: "safe.directory=."
         git_service::set_global_config_value("safe.directory", ".").unwrap();
+
+        // Clone repo
+        let github_server_url = env::var("GITHUB_SERVER_URL")
+            .unwrap_or_else(|e| panic!("{}: \"GITHUB_SERVER_URL\"", e));
+        let github_repository = env::var("GITHUB_REPOSITORY")
+            .unwrap_or_else(|e| panic!("{}: \"GITHUB_REPOSITORY\"", e));
+        let repo_url = format!("{}/{}.git", github_server_url, github_repository);
+        let target_path = env::var("CLONE_TARGET_PATH").unwrap_or(".".to_string());
+        git_service::clone(
+            &repo_url,
+            &target_path,
+            &self.git_username(),
+            &self.git_token(),
+        )
+        .unwrap_or_else(|e| panic!("{}", e));
     }
 
     fn branch_name(&self) -> String {

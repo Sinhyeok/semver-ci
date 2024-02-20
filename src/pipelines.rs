@@ -48,8 +48,10 @@ pub(crate) struct PipelineInfo {
 }
 
 impl PipelineInfo {
-    fn new(pipeline: &dyn Pipeline) -> PipelineInfo {
-        pipeline.init();
+    fn new(pipeline: &dyn Pipeline, init: bool) -> PipelineInfo {
+        if init {
+            pipeline.init();
+        }
 
         PipelineInfo {
             branch_name: pipeline.branch_name(),
@@ -62,10 +64,10 @@ impl PipelineInfo {
     }
 }
 
-pub(crate) fn pipeline_info() -> PipelineInfo {
+pub(crate) fn pipeline_info(init: bool) -> PipelineInfo {
     match pipeline() {
-        Pipelines::GithubActions(p) => PipelineInfo::new(&p),
-        Pipelines::GitlabCI(p) => PipelineInfo::new(&p),
-        Pipelines::GitRepo(p) => PipelineInfo::new(&p),
+        Pipelines::GithubActions(p) => PipelineInfo::new(&p, init),
+        Pipelines::GitlabCI(p) => PipelineInfo::new(&p, init),
+        Pipelines::GitRepo(p) => PipelineInfo::new(&p, init),
     }
 }

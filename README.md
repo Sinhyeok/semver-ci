@@ -1,4 +1,4 @@
-![lint workflow](https://github.com/Sinhyeok/semver-ci/actions/workflows/lint.yml/badge.svg)
+![development workflow](https://github.com/Sinhyeok/semver-ci/actions/workflows/development.yml/badge.svg)
 ![publish workflow](https://github.com/Sinhyeok/semver-ci/actions/workflows/publish.yml/badge.svg)
 # semver-ci
 Semantic Versioning for CI/CD

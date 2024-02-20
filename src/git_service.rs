@@ -115,12 +115,14 @@ pub(crate) fn clone(
     target_path: &str,
     user: &str,
     token: &str,
+    depth: i32,
 ) -> Result<Repository, Error> {
     let mut fetch_options = FetchOptions::new();
     let mut callbacks = RemoteCallbacks::new();
     callbacks.credentials(|_url, username, cred| git_auth_callback(cred, username, user, token));
 
     fetch_options.remote_callbacks(callbacks);
+    fetch_options.depth(depth);
 
     git2::build::RepoBuilder::new()
         .fetch_options(fetch_options)

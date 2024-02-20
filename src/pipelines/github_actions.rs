@@ -23,6 +23,7 @@ impl Pipeline for GithubActions {
             &target_path,
             &self.git_username(),
             &self.git_token(),
+            20,
         )
         .unwrap_or_else(|e| panic!("{}", e));
     }

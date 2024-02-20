@@ -131,7 +131,8 @@ pub(crate) fn clone(
 
 pub(crate) fn checkout(repo: &Repository, ref_name: &str) -> Result<(), Error> {
     let reference = repo.revparse_single(ref_name)?;
-    repo.checkout_tree(&reference, None)
+    repo.checkout_tree(&reference, None)?;
+    repo.set_head_detached(reference.id())
 }
 
 fn fetch_tags(repo: &Repository, user: &str, token: &str) -> Result<(), Error> {

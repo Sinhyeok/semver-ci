@@ -129,6 +129,11 @@ pub(crate) fn clone(
         .clone(url, Path::new(target_path))
 }
 
+pub(crate) fn checkout(repo: &Repository, ref_name: &str) -> Result<(), Error> {
+    let reference = repo.revparse_single(ref_name)?;
+    repo.checkout_tree(&reference, None)
+}
+
 fn fetch_tags(repo: &Repository, user: &str, token: &str) -> Result<(), Error> {
     let mut fetch_options = FetchOptions::new();
     let mut callbacks = RemoteCallbacks::new();

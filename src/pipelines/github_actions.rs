@@ -18,7 +18,7 @@ impl Pipeline for GithubActions {
             .unwrap_or_else(|e| panic!("{}: \"GITHUB_REPOSITORY\"", e));
         let repo_url = format!("{}/{}.git", github_server_url, github_repository);
         let target_path = env::var("CLONE_TARGET_PATH").unwrap_or(".".to_string());
-        git_service::clone(
+        let repo = git_service::clone(
             &repo_url,
             &target_path,
             &self.git_username(),
@@ -26,6 +26,10 @@ impl Pipeline for GithubActions {
             20,
         )
         .unwrap_or_else(|e| panic!("{}", e));
+
+        // Checkout GITHUB_REF
+        let github_ref = env::var("GITHUB_REF").unwrap_or_else(|e| panic!("{}: \"GITHUB_REF\"", e));
+        git_service::checkout(&repo, &github_ref).unwrap_or_else(|e| panic!("{}", e));
     }
 
     fn branch_name(&self) -> String {

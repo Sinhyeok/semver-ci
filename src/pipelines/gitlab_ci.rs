@@ -1,5 +1,6 @@
 use crate::git_service;
 use crate::pipelines::Pipeline;
+use crate::release::Release;
 use std::env;
 
 pub(crate) struct GitlabCI;
@@ -43,6 +44,13 @@ impl Pipeline for GitlabCI {
     fn git_token(&self) -> String {
         env::var("SEMVER_CI_TOKEN").unwrap_or(
             env::var("CI_JOB_TOKEN").unwrap_or_else(|e| panic!("{}: \"CI_JOB_TOKEN\"", e)),
+        )
+    }
+
+    fn create_release(&self, release: &Release) {
+        println!(
+            "{}, {}, {}, {}",
+            release.name, release.description, release.tag_name, release.tag_message
         )
     }
 }

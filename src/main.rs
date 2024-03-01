@@ -3,6 +3,7 @@ extern crate core;
 mod commands;
 mod git_service;
 mod pipelines;
+mod release;
 mod semantic_version;
 
 use dotenv::dotenv;

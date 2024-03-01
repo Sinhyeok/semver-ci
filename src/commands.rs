@@ -1,8 +1,10 @@
-use crate::commands::scope_command::ScopeCommandArgs;
-use crate::commands::tag_command::TagCommandArgs;
 use clap::{Parser, Subcommand};
+use release_command::ReleaseCommandArgs;
+use scope_command::ScopeCommandArgs;
+use tag_command::TagCommandArgs;
 use version_command::VersionCommandArgs;
 
+mod release_command;
 mod scope_command;
 mod tag_command;
 mod version_command;
@@ -20,6 +22,7 @@ enum Commands {
     Version(VersionCommandArgs),
     Scope(ScopeCommandArgs),
     Tag(TagCommandArgs),
+    Release(ReleaseCommandArgs),
 }
 
 pub(crate) fn run() {
@@ -27,5 +30,6 @@ pub(crate) fn run() {
         Commands::Version(args) => version_command::run(args),
         Commands::Scope(args) => scope_command::run(args),
         Commands::Tag(args) => tag_command::run(args),
+        Commands::Release(args) => release_command::run(args),
     }
 }

@@ -5,6 +5,7 @@ mod gitlab_ci;
 use crate::pipelines::git_repo::GitRepo;
 use crate::pipelines::github_actions::{GithubActions, GITHUB_ACTIONS};
 use crate::pipelines::gitlab_ci::{GitlabCI, GITLAB_CI};
+use crate::release::Release;
 use std::env;
 
 pub(crate) trait Pipeline {
@@ -18,15 +19,18 @@ pub(crate) trait Pipeline {
     fn force_fetch_tags(&self) -> bool {
         true
     }
+    fn create_release(&self, _release: &Release) {
+        panic!("Not supported pipeline: {}", self.name())
+    }
 }
 
-enum Pipelines {
+pub(crate) enum Pipelines {
     GithubActions(GithubActions),
     GitlabCI(GitlabCI),
     GitRepo(GitRepo),
 }
 
-fn pipeline() -> Pipelines {
+pub(crate) fn pipelines() -> Pipelines {
     if env::var(GITHUB_ACTIONS).map_or(false, |v| v == "true") {
         eprintln!("on GITHUB_ACTIONS");
         Pipelines::GithubActions(GithubActions)
@@ -66,7 +70,7 @@ impl PipelineInfo {
 }
 
 pub(crate) fn pipeline_info(init: bool) -> PipelineInfo {
-    match pipeline() {
+    match pipelines() {
         Pipelines::GithubActions(p) => PipelineInfo::new(&p, init),
         Pipelines::GitlabCI(p) => PipelineInfo::new(&p, init),
         Pipelines::GitRepo(p) => PipelineInfo::new(&p, init),

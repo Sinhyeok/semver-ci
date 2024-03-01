@@ -1,5 +1,6 @@
 use crate::git_service;
 use crate::pipelines::Pipeline;
+use crate::release::Release;
 use git2::Repository;
 use std::env;
 
@@ -41,6 +42,14 @@ impl Pipeline for GithubActions {
     fn git_token(&self) -> String {
         env::var("GITHUB_TOKEN").unwrap_or_else(|e| panic!("{}: \"GITHUB_TOKEN\"", e))
     }
+
+    fn create_release(&self, release: &Release) {
+        println!(
+            "{}, {}, {}, {}",
+            release.name, release.description, release.tag_name, release.tag_message
+        )
+    }
+}
 
 impl GithubActions {
     fn clone(&self) {

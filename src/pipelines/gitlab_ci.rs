@@ -1,7 +1,6 @@
 use crate::git_service;
 use crate::pipelines::Pipeline;
 use crate::release::Release;
-use std::env;
 
 pub(crate) struct GitlabCI;
 
@@ -9,16 +8,9 @@ pub const GITLAB_CI: &str = "GITLAB_CI";
 
 impl Pipeline for GitlabCI {
     fn init(&self) {
-        match env::var("CI_PROJECT_URL") {
-            Ok(project_url) => {
-                git_service::set_config_value(
-                    "remote.origin.pushurl",
-                    &format!("{}.git", project_url),
-                )
-                .unwrap_or_else(|e| panic!("{}", e));
-            }
-            Err(e) => panic!("{}: CI_PROJECT_URL", e),
-        }
+        let project_url = self.env_var("CI_PROJECT_URL");
+        git_service::set_config_value("remote.origin.pushurl", &format!("{}.git", project_url))
+            .unwrap_or_else(|e| panic!("{}", e));
     }
 
     fn name(&self) -> String {
@@ -26,11 +18,11 @@ impl Pipeline for GitlabCI {
     }
 
     fn branch_name(&self) -> String {
-        env::var("CI_COMMIT_BRANCH").unwrap_or_else(|e| panic!("{}: \"CI_COMMIT_BRANCH\"", e))
+        self.env_var("CI_COMMIT_BRANCH")
     }
 
     fn short_commit_sha(&self) -> String {
-        env::var("CI_COMMIT_SHORT_SHA").unwrap_or_else(|e| panic!("{}: \"CI_COMMIT_SHORT_SHA\"", e))
+        self.env_var("CI_COMMIT_SHORT_SHA")
     }
 
     fn git_username(&self) -> String {
@@ -38,13 +30,11 @@ impl Pipeline for GitlabCI {
     }
 
     fn git_email(&self) -> String {
-        env::var("GITLAB_USER_EMAIL").unwrap_or_else(|e| panic!("{}: \"GITLAB_USER_EMAIL\"", e))
+        self.env_var("GITLAB_USER_EMAIL")
     }
 
     fn git_token(&self) -> String {
-        env::var("SEMVER_CI_TOKEN").unwrap_or(
-            env::var("CI_JOB_TOKEN").unwrap_or_else(|e| panic!("{}: \"CI_JOB_TOKEN\"", e)),
-        )
+        self.env_var_or("SEMVER_CI_TOKEN", &self.env_var("CI_JOB_TOKEN"))
     }
 
     fn create_release(&self, release: &Release) {

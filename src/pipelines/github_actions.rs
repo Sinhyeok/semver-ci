@@ -2,7 +2,6 @@ use crate::git_service;
 use crate::pipelines::Pipeline;
 use crate::release::Release;
 use git2::Repository;
-use std::env;
 
 pub(crate) struct GithubActions;
 
@@ -23,16 +22,16 @@ impl Pipeline for GithubActions {
     }
 
     fn branch_name(&self) -> String {
-        env::var("GITHUB_REF_NAME").unwrap_or_else(|e| panic!("{}: \"GITHUB_REF_NAME\"", e))
+        self.env_var("GITHUB_REF_NAME")
     }
 
     fn short_commit_sha(&self) -> String {
-        let commit_sha = env::var("GITHUB_SHA").unwrap_or_else(|e| panic!("{}: \"GITHUB_SHA\"", e));
+        let commit_sha = self.env_var("GITHUB_SHA");
         commit_sha[0..8].to_owned()
     }
 
     fn git_username(&self) -> String {
-        env::var("GITHUB_ACTOR").unwrap_or_else(|e| panic!("{}: \"GITHUB_ACTOR\"", e))
+        self.env_var("GITHUB_ACTOR")
     }
 
     fn git_email(&self) -> String {
@@ -40,7 +39,7 @@ impl Pipeline for GithubActions {
     }
 
     fn git_token(&self) -> String {
-        env::var("GITHUB_TOKEN").unwrap_or_else(|e| panic!("{}: \"GITHUB_TOKEN\"", e))
+        self.env_var("GITHUB_TOKEN")
     }
 
     fn create_release(&self, release: &Release) {
@@ -54,12 +53,10 @@ impl Pipeline for GithubActions {
 impl GithubActions {
     fn clone(&self) {
         // Clone repo
-        let github_server_url = env::var("GITHUB_SERVER_URL")
-            .unwrap_or_else(|e| panic!("{}: \"GITHUB_SERVER_URL\"", e));
-        let github_repository = env::var("GITHUB_REPOSITORY")
-            .unwrap_or_else(|e| panic!("{}: \"GITHUB_REPOSITORY\"", e));
+        let github_server_url = self.env_var("GITHUB_SERVER_URL");
+        let github_repository = self.env_var("GITHUB_REPOSITORY");
         let repo_url = format!("{}/{}.git", github_server_url, github_repository);
-        let target_path = env::var("CLONE_TARGET_PATH").unwrap_or(".".to_string());
+        let target_path = self.env_var_or("CLONE_TARGET_PATH", ".");
         let repo = git_service::clone(
             &repo_url,
             &target_path,
@@ -70,7 +67,7 @@ impl GithubActions {
         .unwrap_or_else(|e| panic!("{}", e));
 
         // Checkout GITHUB_REF
-        let github_ref = env::var("GITHUB_REF").unwrap_or_else(|e| panic!("{}: \"GITHUB_REF\"", e));
+        let github_ref = self.env_var("GITHUB_REF");
         git_service::checkout(&repo, &github_ref).unwrap_or_else(|e| panic!("{}", e));
     }
 }

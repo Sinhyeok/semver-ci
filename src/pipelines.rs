@@ -22,6 +22,12 @@ pub(crate) trait Pipeline {
     fn create_release(&self, _release: &Release) {
         panic!("Not supported pipeline: {}", self.name())
     }
+    fn env_var(&self, name: &str) -> String {
+        env::var(name).unwrap_or_else(|e| panic!("{}: \"{}\"", e, name))
+    }
+    fn env_var_or(&self, name: &str, default: &str) -> String {
+        env::var(name).unwrap_or(default.to_string())
+    }
 }
 
 pub(crate) enum Pipelines {

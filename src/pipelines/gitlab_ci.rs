@@ -8,9 +8,7 @@ pub const GITLAB_CI: &str = "GITLAB_CI";
 
 impl Pipeline for GitlabCI {
     fn init(&self) {
-        let project_url = self.env_var("CI_PROJECT_URL");
-        git_service::set_config_value("remote.origin.pushurl", &format!("{}.git", project_url))
-            .unwrap_or_else(|e| panic!("{}", e));
+        self.git_origin_pushurl(self.env_var("CI_PROJECT_URL"));
     }
 
     fn name(&self) -> String {
@@ -42,5 +40,12 @@ impl Pipeline for GitlabCI {
             "{}, {}, {}, {}",
             release.name, release.description, release.tag_name, release.tag_message
         )
+    }
+}
+
+impl GitlabCI {
+    fn git_origin_pushurl(&self, url: String) {
+        git_service::set_config_value("remote.origin.pushurl", &format!("{}.git", url))
+            .unwrap_or_else(|e| panic!("{}", e));
     }
 }

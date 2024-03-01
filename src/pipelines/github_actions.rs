@@ -17,6 +17,10 @@ impl Pipeline for GithubActions {
         }
     }
 
+    fn name(&self) -> String {
+        "Github Actions".to_string()
+    }
+
     fn branch_name(&self) -> String {
         env::var("GITHUB_REF_NAME").unwrap_or_else(|e| panic!("{}: \"GITHUB_REF_NAME\"", e))
     }

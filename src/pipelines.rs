@@ -9,6 +9,7 @@ use std::env;
 
 pub(crate) trait Pipeline {
     fn init(&self) {}
+    fn name(&self) -> String;
     fn branch_name(&self) -> String;
     fn short_commit_sha(&self) -> String;
     fn git_username(&self) -> String;

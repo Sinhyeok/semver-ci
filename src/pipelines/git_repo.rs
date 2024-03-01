@@ -5,6 +5,10 @@ use std::env;
 pub(crate) struct GitRepo;
 
 impl Pipeline for GitRepo {
+    fn name(&self) -> String {
+        "Git Repo".to_string()
+    }
+
     fn branch_name(&self) -> String {
         git_service::branch_name()
             .unwrap_or_else(|e| panic!("Failed to retrieve branch_name: {}", e))

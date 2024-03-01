@@ -20,6 +20,10 @@ impl Pipeline for GitlabCI {
         }
     }
 
+    fn name(&self) -> String {
+        "GitLab CI".to_string()
+    }
+
     fn branch_name(&self) -> String {
         env::var("CI_COMMIT_BRANCH").unwrap_or_else(|e| panic!("{}: \"CI_COMMIT_BRANCH\"", e))
     }

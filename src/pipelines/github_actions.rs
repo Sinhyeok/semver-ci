@@ -58,13 +58,14 @@ impl GithubActions {
 
     fn clone(&self) {
         // Clone repo
-        let github_server_url = self.env_var("GITHUB_SERVER_URL");
-        let github_repository = self.env_var("GITHUB_REPOSITORY");
-        let repo_url = format!("{}/{}.git", github_server_url, github_repository);
-        let target_path = self.env_var_or("CLONE_TARGET_PATH", ".");
+        let repo_url = format!(
+            "{}/{}.git",
+            self.env_var("GITHUB_SERVER_URL"),
+            self.env_var("GITHUB_REPOSITORY")
+        );
         let repo = git_service::clone(
             &repo_url,
-            &target_path,
+            &self.env_var_or("CLONE_TARGET_PATH", "."),
             &self.git_username(),
             &self.git_token(),
             20,

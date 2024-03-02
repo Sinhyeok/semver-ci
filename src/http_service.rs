@@ -5,7 +5,7 @@ use std::collections::HashMap;
 pub(crate) fn post(
     url: String,
     headers: Option<HeaderMap>,
-    body: Option<HashMap<&str, String>>,
+    body: Option<HashMap<&str, Value>>,
 ) -> HashMap<String, Value> {
     let mut request_builder = reqwest::blocking::Client::new().post(url);
     if headers.is_some() {

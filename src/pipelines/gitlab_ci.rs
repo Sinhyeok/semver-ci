@@ -2,7 +2,7 @@ use crate::pipelines::Pipeline;
 use crate::release::Release;
 use crate::{git_service, http_service};
 use reqwest::header::HeaderMap;
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::collections::HashMap;
 
 pub(crate) struct GitlabCI;
@@ -49,11 +49,11 @@ impl Pipeline for GitlabCI {
         headers.insert("JOB-TOKEN", self.env_var("CI_JOB_TOKEN").parse().unwrap());
 
         let mut body = HashMap::new();
-        body.insert("name", release.name.clone());
-        body.insert("description", release.description.clone());
-        body.insert("tag_name", release.tag_name.clone());
-        body.insert("tag_message", release.tag_message.clone());
-        body.insert("ref", self.env_var("CI_COMMIT_SHA"));
+        body.insert("name", json!(release.name.clone()));
+        body.insert("description", json!(release.description.clone()));
+        body.insert("tag_name", json!(release.tag_name.clone()));
+        body.insert("tag_message", json!(release.tag_message.clone()));
+        body.insert("ref", json!(self.env_var("CI_COMMIT_SHA")));
 
         http_service::post(url, Some(headers), Some(body))
     }

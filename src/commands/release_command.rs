@@ -12,6 +12,8 @@ pub(crate) struct ReleaseCommandArgs {
     #[arg(long, env, default_value = "")]
     tag_message: String,
     #[arg(short, long, env, action)]
+    generate_release_notes: bool,
+    #[arg(short, long, env, action)]
     strip_prefix_v: bool,
 }
 
@@ -22,6 +24,7 @@ pub(crate) fn run(args: ReleaseCommandArgs) {
         description: args.description,
         tag_name,
         tag_message: args.tag_message,
+        generate_release_notes: args.generate_release_notes,
     };
 
     let parsed = release.create();

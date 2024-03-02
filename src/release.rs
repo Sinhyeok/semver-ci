@@ -7,6 +7,7 @@ pub(crate) struct Release {
     pub(crate) description: String,
     pub(crate) tag_name: String,
     pub(crate) tag_message: String,
+    pub(crate) generate_release_notes: bool,
 }
 
 impl Release {

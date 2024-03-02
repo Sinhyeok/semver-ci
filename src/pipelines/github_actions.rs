@@ -2,6 +2,8 @@ use crate::git_service;
 use crate::pipelines::Pipeline;
 use crate::release::Release;
 use git2::Repository;
+use serde_json::Value;
+use std::collections::HashMap;
 
 pub(crate) struct GithubActions;
 
@@ -43,11 +45,8 @@ impl Pipeline for GithubActions {
         self.env_var("GITHUB_TOKEN")
     }
 
-    fn create_release(&self, release: &Release) {
-        println!(
-            "{}, {}, {}, {}",
-            release.name, release.description, release.tag_name, release.tag_message
-        )
+    fn create_release(&self, _release: &Release) -> HashMap<String, Value> {
+        HashMap::new()
     }
 }
 

@@ -6,6 +6,8 @@ use crate::pipelines::git_repo::GitRepo;
 use crate::pipelines::github_actions::{GithubActions, GITHUB_ACTIONS};
 use crate::pipelines::gitlab_ci::{GitlabCI, GITLAB_CI};
 use crate::release::Release;
+use serde_json::Value;
+use std::collections::HashMap;
 use std::env;
 
 pub(crate) trait Pipeline {
@@ -19,7 +21,7 @@ pub(crate) trait Pipeline {
     fn force_fetch_tags(&self) -> bool {
         true
     }
-    fn create_release(&self, _release: &Release) {
+    fn create_release(&self, _release: &Release) -> HashMap<String, Value> {
         panic!("Not supported pipeline: {}", self.name())
     }
     fn env_var(&self, name: &str) -> String {
@@ -30,13 +32,13 @@ pub(crate) trait Pipeline {
     }
 }
 
-pub(crate) enum Pipelines {
+enum Pipelines {
     GithubActions(GithubActions),
     GitlabCI(GitlabCI),
     GitRepo(GitRepo),
 }
 
-pub(crate) fn pipelines() -> Pipelines {
+fn pipelines() -> Pipelines {
     if env::var(GITHUB_ACTIONS).map_or(false, |v| v == "true") {
         eprintln!("on GITHUB_ACTIONS");
         Pipelines::GithubActions(GithubActions)
@@ -80,5 +82,13 @@ pub(crate) fn pipeline_info(init: bool) -> PipelineInfo {
         Pipelines::GithubActions(p) => PipelineInfo::new(&p, init),
         Pipelines::GitlabCI(p) => PipelineInfo::new(&p, init),
         Pipelines::GitRepo(p) => PipelineInfo::new(&p, init),
+    }
+}
+
+pub(crate) fn create_release(release: &Release) -> HashMap<String, Value> {
+    match pipelines() {
+        Pipelines::GithubActions(p) => p.create_release(release),
+        Pipelines::GitlabCI(p) => p.create_release(release),
+        Pipelines::GitRepo(p) => p.create_release(release),
     }
 }

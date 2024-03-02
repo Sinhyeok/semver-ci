@@ -1,5 +1,6 @@
 use crate::pipelines;
-use crate::pipelines::Pipeline;
+use serde_json::Value;
+use std::collections::HashMap;
 
 pub(crate) struct Release {
     pub(crate) name: String,
@@ -9,11 +10,7 @@ pub(crate) struct Release {
 }
 
 impl Release {
-    pub(crate) fn create(&self) {
-        match pipelines::pipelines() {
-            pipelines::Pipelines::GithubActions(p) => p.create_release(self),
-            pipelines::Pipelines::GitlabCI(p) => p.create_release(self),
-            pipelines::Pipelines::GitRepo(p) => p.create_release(self),
-        };
+    pub(crate) fn create(&self) -> HashMap<String, Value> {
+        pipelines::create_release(self)
     }
 }

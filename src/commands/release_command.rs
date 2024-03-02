@@ -23,5 +23,7 @@ pub(crate) fn run(args: ReleaseCommandArgs) {
         tag_name,
         tag_message: args.tag_message,
     };
-    release.create();
+
+    let parsed = release.create();
+    println!("{:#?}", parsed);
 }

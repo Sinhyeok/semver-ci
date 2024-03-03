@@ -18,23 +18,21 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Lint
         run: cargo clippy -- -Dwarnings
+
   upcoming_version:
     runs-on: ubuntu-latest
-    container: tartar4s/semver-ci:v0.5.0
+    container: tartar4s/semver-ci:v0.6.0
     needs: [ lint ]
     outputs:
       UPCOMING_VERSION: ${{ steps.set_upcoming_version.outputs.UPCOMING_VERSION }}
     steps:
-      - name: Check out the repo
-        uses: actions/checkout@v4
-      - name: Set upcoming version
-        id: set_upcoming_version
+      - id: set_upcoming_version
         run: |
-          git config --global --add safe.directory .
           export SCOPE=$(svci scope)
           echo "UPCOMING_VERSION=$(svci version)" >> "$GITHUB_OUTPUT"
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   push_to_registry:
     name: Push Docker image to Docker Hub
     runs-on: ubuntu-latest
@@ -63,20 +61,20 @@ jobs:
           push: true
           tags: tartar4s/semver-ci:${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
           labels: ${{ steps.meta.outputs.labels }}
-  tag:
+
+  release_candidate:
     runs-on: ubuntu-latest
-    container: tartar4s/semver-ci:v0.5.0
+    container: tartar4s/semver-ci:v0.6.0
     if: startsWith(github.ref_name, 'release/') || startsWith(github.ref_name, 'hotfix/')
     needs: [ upcoming_version, push_to_registry ]
     permissions:
       contents: write
     steps:
-      - name: Check out the repo
-        uses: actions/checkout@v4
-      - name: Tag
-        run: |
-          git config --global --add safe.directory .
-          svci tag "$TAG_NAME"
+      - run: svci release "$RELEASE_NAME"
     env:
-      TAG_NAME: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
+      RELEASE_NAME: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DESCRIPTION: |
+        ## Artifacts
+        - Container image: tartar4s/semver-ci:${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
+      GENERATE_RELEASE_NOTES: true

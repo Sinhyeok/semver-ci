@@ -26,8 +26,7 @@ jobs:
     outputs:
       UPCOMING_VERSION: ${{ steps.set_upcoming_version.outputs.UPCOMING_VERSION }}
     steps:
-      - name: Set upcoming version
-        id: set_upcoming_version
+      - id: set_upcoming_version
           #export MAJOR='^release/[0-9]+.x.x$'
           #export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
           #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
@@ -45,7 +44,7 @@ jobs:
     env:
       RELEASE_TAG: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
 
-  tag:
+  release_candidate:
     runs-on: ubuntu-latest
     container: tartar4s/semver-ci
     if: startsWith(github.ref_name, 'release/') || startsWith(github.ref_name, 'hotfix/')
@@ -53,16 +52,14 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Tag
-        run: svci tag "$TAG_NAME"
+      - run: svci release "$RELEASE_NAME"
     env:
-      TAG_NAME: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
+      RELEASE_NAME: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #GENERATE_RELEASE_NOTES: true
 ```
 ### GitLab CI/CD
 - [example](https://gitlab.com/attar.sh/semver-ci-example)
-> [!NOTE]
-> For tagging, "SEMVER_CI_TOKEN" with read_repository/write_repository permissions must be set in CI/CD variables 
 ```yaml
 # .gitlab-ci.yml
 
@@ -98,16 +95,15 @@ build:
   rules:
     - if: $CI_COMMIT_BRANCH
 
-# "SEMVER_CI_TOKEN" with read_repository/write_repository permissions must be set in CI/CD variables
-tag:
+release_candidate:
   stage: after_build
   image:
     name: tartar4s/semver-ci
     entrypoint: [""]
   variables:
-    TAG_NAME: $UPCOMING_VERSION
+    RELEASE_NAME: $UPCOMING_VERSION
   script:
-    - svci tag $TAG_NAME
+    - svci release $RELEASE_NAME
   rules:
     - if: $CI_COMMIT_BRANCH =~ /^(release\/.+|hotfix\/.+)$/
 ```
@@ -151,6 +147,23 @@ Options:
   -h, --help           Print help
   -V, --version        Print version
 ```
+### release
+Create a release in Github or GitLab
+```shell
+Usage: svci release [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  Release name
+
+Options:
+      --description <DESCRIPTION>  [env: DESCRIPTION=] [default: ]
+      --tag-name <TAG_NAME>        [env: TAG_NAME=]
+      --tag-message <TAG_MESSAGE>  Specify tag_message to create an annotated tag [env: TAG_MESSAGE=] [default: ]
+  -g, --generate-release-notes     (Only for Github Actions) Automatically generate the body for this release. If body is specified, the body will be pre-pended to the automatically generated notes [env: GENERATE_RELEASE_NOTES=]
+  -s, --strip-prefix-v             Strip prefix "v" from release name and tag name. ex) v0.1.0 => 0.1.0 [env: STRIP_PREFIX_V=]
+  -h, --help                       Print help
+  -V, --version                    Print version
+```
 ### tag
 Create and push git tag to origin
 ```shell
@@ -165,6 +178,9 @@ Options:
   -h, --help                       Print help
   -V, --version                    Print version
 ```
+> [!NOTE]
+> For tagging on GitLab CI, "SEMVER_CI_TOKEN" with read_repository/write_repository permissions must be set in CI/CD variables
+
 
 ## Development
 ### Install rustup and cmake

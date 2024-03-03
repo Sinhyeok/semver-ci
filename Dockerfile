@@ -22,7 +22,7 @@ RUN cargo build --release --target x86_64-unknown-linux-musl
 FROM alpine:3.19.0 AS runtime
 
 # apk
-RUN apk add git
+RUN apk add curl
 COPY --from=build /app/target/x86_64-unknown-linux-musl/release/svci /usr/local/bin/svci
 
 FROM runtime as action

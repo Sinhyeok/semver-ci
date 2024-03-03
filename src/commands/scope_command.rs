@@ -21,7 +21,7 @@ pub(crate) fn run(args: ScopeCommandArgs) {
     let minor_regex = Regex::new(&args.minor).unwrap_or_else(|e| panic!("{}", e));
     let patch_regex = Regex::new(&args.patch).unwrap_or_else(|e| panic!("{}", e));
 
-    let pipeline_info = pipelines::pipeline_info();
+    let pipeline_info = pipelines::pipeline_info(false);
     let branch_name = pipeline_info.branch_name.as_str();
 
     if major_regex.is_match(branch_name) {

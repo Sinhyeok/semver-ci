@@ -5,10 +5,14 @@ mod gitlab_ci;
 use crate::pipelines::git_repo::GitRepo;
 use crate::pipelines::github_actions::{GithubActions, GITHUB_ACTIONS};
 use crate::pipelines::gitlab_ci::{GitlabCI, GITLAB_CI};
+use crate::release::Release;
+use serde_json::Value;
+use std::collections::HashMap;
 use std::env;
 
 pub(crate) trait Pipeline {
     fn init(&self) {}
+    fn name(&self) -> String;
     fn branch_name(&self) -> String;
     fn short_commit_sha(&self) -> String;
     fn git_username(&self) -> String;
@@ -16,6 +20,15 @@ pub(crate) trait Pipeline {
     fn git_token(&self) -> String;
     fn force_fetch_tags(&self) -> bool {
         true
+    }
+    fn create_release(&self, _release: &Release) -> HashMap<String, Value> {
+        panic!("Not supported pipeline: {}", self.name())
+    }
+    fn env_var(&self, name: &str) -> String {
+        env::var(name).unwrap_or_else(|e| panic!("{}: \"{}\"", e, name))
+    }
+    fn env_var_or(&self, name: &str, default: &str) -> String {
+        env::var(name).unwrap_or(default.to_string())
     }
 }
 
@@ -25,7 +38,7 @@ enum Pipelines {
     GitRepo(GitRepo),
 }
 
-fn pipeline() -> Pipelines {
+fn pipelines() -> Pipelines {
     if env::var(GITHUB_ACTIONS).map_or(false, |v| v == "true") {
         eprintln!("on GITHUB_ACTIONS");
         Pipelines::GithubActions(GithubActions)
@@ -48,8 +61,10 @@ pub(crate) struct PipelineInfo {
 }
 
 impl PipelineInfo {
-    fn new(pipeline: &dyn Pipeline) -> PipelineInfo {
-        pipeline.init();
+    fn new(pipeline: &dyn Pipeline, init: bool) -> PipelineInfo {
+        if init {
+            pipeline.init();
+        }
 
         PipelineInfo {
             branch_name: pipeline.branch_name(),
@@ -62,10 +77,18 @@ impl PipelineInfo {
     }
 }
 
-pub(crate) fn pipeline_info() -> PipelineInfo {
-    match pipeline() {
-        Pipelines::GithubActions(p) => PipelineInfo::new(&p),
-        Pipelines::GitlabCI(p) => PipelineInfo::new(&p),
-        Pipelines::GitRepo(p) => PipelineInfo::new(&p),
+pub(crate) fn pipeline_info(init: bool) -> PipelineInfo {
+    match pipelines() {
+        Pipelines::GithubActions(p) => PipelineInfo::new(&p, init),
+        Pipelines::GitlabCI(p) => PipelineInfo::new(&p, init),
+        Pipelines::GitRepo(p) => PipelineInfo::new(&p, init),
+    }
+}
+
+pub(crate) fn create_release(release: &Release) -> HashMap<String, Value> {
+    match pipelines() {
+        Pipelines::GithubActions(p) => p.create_release(release),
+        Pipelines::GitlabCI(p) => p.create_release(release),
+        Pipelines::GitRepo(p) => p.create_release(release),
     }
 }

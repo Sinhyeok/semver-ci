@@ -110,6 +110,31 @@ pub(crate) fn set_global_config_value(name: &str, value: &str) -> Result<(), Err
     config.set_str(name, value)
 }
 
+pub(crate) fn clone(
+    url: &str,
+    target_path: &str,
+    user: &str,
+    token: &str,
+    depth: i32,
+) -> Result<Repository, Error> {
+    let mut fetch_options = FetchOptions::new();
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(|_url, username, cred| git_auth_callback(cred, username, user, token));
+
+    fetch_options.remote_callbacks(callbacks);
+    fetch_options.depth(depth);
+
+    git2::build::RepoBuilder::new()
+        .fetch_options(fetch_options)
+        .clone(url, Path::new(target_path))
+}
+
+pub(crate) fn checkout(repo: &Repository, ref_name: &str) -> Result<(), Error> {
+    let reference = repo.revparse_single(ref_name)?;
+    repo.checkout_tree(&reference, None)?;
+    repo.set_head_detached(reference.id())
+}
+
 fn fetch_tags(repo: &Repository, user: &str, token: &str) -> Result<(), Error> {
     let mut fetch_options = FetchOptions::new();
     let mut callbacks = RemoteCallbacks::new();

@@ -1,10 +1,13 @@
 use crate::git_service;
 use crate::pipelines::Pipeline;
-use std::env;
 
 pub(crate) struct GitRepo;
 
 impl Pipeline for GitRepo {
+    fn name(&self) -> String {
+        "Git Repo".to_string()
+    }
+
     fn branch_name(&self) -> String {
         git_service::branch_name()
             .unwrap_or_else(|e| panic!("Failed to retrieve branch_name: {}", e))
@@ -24,13 +27,12 @@ impl Pipeline for GitRepo {
     }
 
     fn git_token(&self) -> String {
-        env::var("GIT_TOKEN").unwrap_or_else(|e| panic!("{}: \"GIT_TOKEN\"", e))
+        self.env_var("GIT_TOKEN")
     }
 
     fn force_fetch_tags(&self) -> bool {
-        env::var("FORCE_FETCH_TAGS")
-            .unwrap_or("false".to_string())
-            .parse()
-            .unwrap_or_else(|e| panic!("{}: \"FORCE_FETCH_TAGS\"", e))
+        let flag = self.env_var_or("FORCE_FETCH_TAGS", "false");
+        flag.parse()
+            .unwrap_or_else(|e| panic!("{}\nFORCE_FETCH_TAGS: {}", e, flag))
     }
 }

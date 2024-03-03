@@ -12,7 +12,7 @@ pub(crate) struct TagCommandArgs {
 }
 
 pub(crate) fn run(args: TagCommandArgs) {
-    let pipeline_info = pipelines::pipeline_info();
+    let pipeline_info = pipelines::pipeline_info(true);
 
     let mut tag_name = args.tag_name.as_str();
     if args.strip_prefix_v {

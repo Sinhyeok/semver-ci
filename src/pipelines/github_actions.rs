@@ -12,7 +12,7 @@ pub const GITHUB_ACTIONS: &str = "GITHUB_ACTIONS";
 
 impl Pipeline for GithubActions {
     fn init(&self) {
-        let target_path = self.env_var_or("CLONE_TARGET_PATH", ".");
+        let target_path = self.target_path();
 
         // Git config: "safe.directory=."
         Self::add_safe_directory(&target_path);
@@ -82,7 +82,7 @@ impl GithubActions {
         git_service::set_global_config_value("safe.directory", path).unwrap();
     }
 
-    fn clone(&self, target_path: &str) {
+    fn clone(&self, repo_path: &str) {
         // Clone repo
         let repo_url = format!(
             "{}/{}.git",
@@ -91,7 +91,7 @@ impl GithubActions {
         );
         let repo = git_service::clone(
             &repo_url,
-            target_path,
+            repo_path,
             &self.git_username(),
             &self.git_token(),
             20,

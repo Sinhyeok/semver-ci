@@ -10,7 +10,8 @@ use std::path::Path;
 const SEMANTIC_VERSION_TAG_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+)$";
 
 pub(crate) fn last_semantic_version_tag(default: String, pipeline_info: &PipelineInfo) -> String {
-    let repo = Repository::open(".").unwrap_or_else(|e| panic!("Failed to open git repo: {}", e));
+    let repo = Repository::open(&pipeline_info.target_path)
+        .unwrap_or_else(|e| panic!("Failed to open git repo: {}", e));
 
     let semantic_version_regex = Regex::new(SEMANTIC_VERSION_TAG_PATTERN).unwrap();
 
@@ -36,8 +37,8 @@ pub(crate) fn last_semantic_version_tag(default: String, pipeline_info: &Pipelin
         .map_or(default, |tag_name| tag_name.to_string())
 }
 
-pub(crate) fn branch_name() -> Result<String, Error> {
-    let repo = Repository::open(".")?;
+pub(crate) fn branch_name(repo_path: &str) -> Result<String, Error> {
+    let repo = Repository::open(repo_path)?;
 
     let head = repo.head()?;
 
@@ -54,8 +55,8 @@ pub(crate) fn branch_name() -> Result<String, Error> {
     }
 }
 
-pub(crate) fn short_commit_sha() -> Result<String, Error> {
-    let repo = Repository::open(".")?;
+pub(crate) fn short_commit_sha(repo_path: &str) -> Result<String, Error> {
+    let repo = Repository::open(repo_path)?;
 
     let commit_sha = repo.head()?.peel_to_commit()?.id().to_string();
 
@@ -67,7 +68,7 @@ pub(crate) fn tag_and_push(
     tag_name: &str,
     tag_message: &str,
 ) -> Result<(), Error> {
-    let repo = Repository::open(".")?;
+    let repo = Repository::open(&pipeline_info.target_path)?;
 
     tag(
         &repo,
@@ -84,8 +85,8 @@ pub(crate) fn tag_and_push(
     )
 }
 
-pub(crate) fn get_config_value(name: &str) -> Option<String> {
-    let repo = match Repository::open(".") {
+pub(crate) fn get_config_value(repo_path: &str, name: &str) -> Option<String> {
+    let repo = match Repository::open(repo_path) {
         Ok(repo) => repo,
         Err(_) => return None,
     };
@@ -103,8 +104,8 @@ pub(crate) fn get_config_value(name: &str) -> Option<String> {
     value
 }
 
-pub(crate) fn set_config_value(name: &str, value: &str) -> Result<(), Error> {
-    let repo = Repository::open(".")?;
+pub(crate) fn set_config_value(repo_path: &str, name: &str, value: &str) -> Result<(), Error> {
+    let repo = Repository::open(repo_path)?;
 
     let mut config = repo.config()?;
     config.set_str(name, value)

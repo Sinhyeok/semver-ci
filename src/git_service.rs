@@ -63,28 +63,6 @@ pub(crate) fn short_commit_sha(repo_path: &str) -> Result<String, Error> {
     Ok(commit_sha[..8].to_string())
 }
 
-pub(crate) fn tag_and_push(
-    pipeline_info: &PipelineInfo,
-    tag_name: &str,
-    tag_message: &str,
-) -> Result<(), Error> {
-    let repo = Repository::open(&pipeline_info.target_path)?;
-
-    tag(
-        &repo,
-        tag_name,
-        tag_message,
-        &pipeline_info.git_username,
-        &pipeline_info.git_email,
-    )?;
-    push_tag(
-        &repo,
-        &pipeline_info.git_username,
-        &pipeline_info.git_token,
-        tag_name,
-    )
-}
-
 pub(crate) fn get_config_value(repo_path: &str, name: &str) -> Option<String> {
     let repo = match Repository::open(repo_path) {
         Ok(repo) => repo,
@@ -157,6 +135,37 @@ pub(crate) fn fetch_refs(
         .fetch(refspecs, Some(&mut fetch_options), None)
 }
 
+pub(crate) fn tag(
+    repo: &Repository,
+    tag_name: &str,
+    tag_message: &str,
+    user: &str,
+    email: &str,
+) -> Result<Oid, Error> {
+    let head = repo.head()?;
+    let git_object = head.peel(ObjectType::Any)?;
+    let tagger = git2::Signature::now(user, email)?;
+
+    repo.tag(tag_name, &git_object, &tagger, tag_message, false)
+}
+
+pub(crate) fn push_tag(
+    repo: &Repository,
+    user: &str,
+    token: &str,
+    tag_name: &str,
+) -> Result<(), Error> {
+    let mut push_options = PushOptions::new();
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(|_url, username, cred| git_auth_callback(cred, username, user, token));
+
+    push_options.remote_callbacks(callbacks);
+
+    let ref_spec = format!("refs/tags/{}", tag_name);
+    repo.find_remote("origin")?
+        .push(&[ref_spec], Some(&mut push_options))
+}
+
 fn git_auth_callback(
     cred: CredentialType,
     username: Option<&str>,
@@ -188,30 +197,4 @@ fn ssh_key_passphrase() -> Option<String> {
         Ok(s) => Some(s),
         Err(_e) => None,
     }
-}
-
-fn tag(
-    repo: &Repository,
-    tag_name: &str,
-    tag_message: &str,
-    user: &str,
-    email: &str,
-) -> Result<Oid, Error> {
-    let head = repo.head()?;
-    let git_object = head.peel(ObjectType::Any)?;
-    let tagger = git2::Signature::now(user, email)?;
-
-    repo.tag(tag_name, &git_object, &tagger, tag_message, false)
-}
-
-fn push_tag(repo: &Repository, user: &str, token: &str, tag_name: &str) -> Result<(), Error> {
-    let mut push_options = PushOptions::new();
-    let mut callbacks = RemoteCallbacks::new();
-    callbacks.credentials(|_url, username, cred| git_auth_callback(cred, username, user, token));
-
-    push_options.remote_callbacks(callbacks);
-
-    let ref_spec = format!("refs/tags/{}", tag_name);
-    repo.find_remote("origin")?
-        .push(&[ref_spec], Some(&mut push_options))
 }

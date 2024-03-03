@@ -1,5 +1,7 @@
+use crate::pipelines::PipelineInfo;
 use crate::{git_service, pipelines};
 use clap::Args;
+use git2::{Error, Repository};
 
 #[derive(Args)]
 pub(crate) struct TagCommandArgs {
@@ -21,6 +23,28 @@ pub(crate) fn run(args: TagCommandArgs) {
 
     let tag_message = args.tag_message.as_str();
 
-    git_service::tag_and_push(&pipeline_info, tag_name, tag_message)
-        .unwrap_or_else(|e| panic!("{}", e));
+    tag_and_push(&pipeline_info, tag_name, tag_message).unwrap_or_else(|e| panic!("{}", e));
+}
+
+fn tag_and_push(
+    pipeline_info: &PipelineInfo,
+    tag_name: &str,
+    tag_message: &str,
+) -> Result<(), Error> {
+    let repo = Repository::open(&pipeline_info.target_path)?;
+
+    git_service::tag(
+        &repo,
+        tag_name,
+        tag_message,
+        &pipeline_info.git_username,
+        &pipeline_info.git_email,
+    )?;
+
+    git_service::push_tag(
+        &repo,
+        &pipeline_info.git_username,
+        &pipeline_info.git_token,
+        tag_name,
+    )
 }

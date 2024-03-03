@@ -18,7 +18,7 @@ impl Pipeline for GithubActions {
         Self::add_safe_directory(&target_path);
 
         // Clone
-        if Repository::open(target_path).is_err() {
+        if Repository::open(&target_path).is_err() {
             self.clone(&target_path);
         }
     }

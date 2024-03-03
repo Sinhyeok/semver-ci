@@ -12,12 +12,14 @@ pub const GITHUB_ACTIONS: &str = "GITHUB_ACTIONS";
 
 impl Pipeline for GithubActions {
     fn init(&self) {
+        let target_path = self.env_var_or("CLONE_TARGET_PATH", ".");
+
         // Git config: "safe.directory=."
-        Self::add_safe_directory(".");
+        Self::add_safe_directory(&target_path);
 
         // Clone
-        if Repository::open(".").is_err() {
-            self.clone();
+        if Repository::open(&target_path).is_err() {
+            self.clone(&target_path);
         }
     }
 
@@ -80,7 +82,7 @@ impl GithubActions {
         git_service::set_global_config_value("safe.directory", path).unwrap();
     }
 
-    fn clone(&self) {
+    fn clone(&self, target_path: &str) {
         // Clone repo
         let repo_url = format!(
             "{}/{}.git",
@@ -89,15 +91,20 @@ impl GithubActions {
         );
         let repo = git_service::clone(
             &repo_url,
-            &self.env_var_or("CLONE_TARGET_PATH", "."),
+            target_path,
             &self.git_username(),
             &self.git_token(),
             20,
         )
         .unwrap_or_else(|e| panic!("{}", e));
 
-        // Checkout GITHUB_REF
+        // Fetch GITHUB_REF
         let github_ref = self.env_var("GITHUB_REF");
+        let refspec = format!("{}:{}", github_ref, github_ref);
+        git_service::fetch_refs(&repo, &self.git_username(), &self.git_token(), &[&refspec])
+            .unwrap_or_else(|e| panic!("Failed to fetch GITHUB_REF: {}", e));
+
+        // Checkout GITHUB_REF
         git_service::checkout(&repo, &github_ref).unwrap_or_else(|e| panic!("{}", e));
     }
 }

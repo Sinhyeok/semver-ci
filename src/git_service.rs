@@ -15,8 +15,13 @@ pub(crate) fn last_semantic_version_tag(default: String, pipeline_info: &Pipelin
     let semantic_version_regex = Regex::new(SEMANTIC_VERSION_TAG_PATTERN).unwrap();
 
     if pipeline_info.force_fetch_tags {
-        fetch_tags(&repo, &pipeline_info.git_username, &pipeline_info.git_token)
-            .unwrap_or_else(|e| panic!("Failed to retrieve tags: {}", e));
+        fetch_refs(
+            &repo,
+            &pipeline_info.git_username,
+            &pipeline_info.git_token,
+            &["refs/tags/*:refs/tags/*"],
+        )
+        .unwrap_or_else(|e| panic!("Failed to retrieve tags: {}", e));
     }
 
     let tag_names = repo
@@ -135,7 +140,12 @@ pub(crate) fn checkout(repo: &Repository, ref_name: &str) -> Result<(), Error> {
     repo.set_head_detached(reference.id())
 }
 
-fn fetch_tags(repo: &Repository, user: &str, token: &str) -> Result<(), Error> {
+pub(crate) fn fetch_refs(
+    repo: &Repository,
+    user: &str,
+    token: &str,
+    refspecs: &[&str],
+) -> Result<(), Error> {
     let mut fetch_options = FetchOptions::new();
     let mut callbacks = RemoteCallbacks::new();
     callbacks.credentials(|_url, username, cred| git_auth_callback(cred, username, user, token));
@@ -143,7 +153,7 @@ fn fetch_tags(repo: &Repository, user: &str, token: &str) -> Result<(), Error> {
     fetch_options.remote_callbacks(callbacks);
 
     repo.find_remote("origin")?
-        .fetch(&["refs/tags/*:refs/tags/*"], Some(&mut fetch_options), None)
+        .fetch(refspecs, Some(&mut fetch_options), None)
 }
 
 fn git_auth_callback(

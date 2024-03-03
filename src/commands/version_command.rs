@@ -7,6 +7,7 @@ use regex::Regex;
 const DEFAULT_SEMANTIC_VERSION_TAG: &str = "v0.0.0";
 const DEV_PATTERN: &str = r"^(develop|feature/.*)$";
 const RELEASE_CANDIDATE_PATTERN: &str = r"^(release|hotfix)/.*$";
+const SEMANTIC_VERSION_TAG_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+)$";
 
 #[derive(Args)]
 pub(crate) struct VersionCommandArgs {
@@ -16,9 +17,17 @@ pub(crate) struct VersionCommandArgs {
 
 pub(crate) fn run(args: VersionCommandArgs) {
     let pipeline_info = pipelines::pipeline_info(true);
-    let last_tag = git_service::last_semantic_version_tag(
-        DEFAULT_SEMANTIC_VERSION_TAG.to_string(),
-        &pipeline_info,
+
+    let tag_names = git_service::tag_names(
+        &pipeline_info.target_path,
+        pipeline_info.force_fetch_tags,
+        &pipeline_info.git_username,
+        &pipeline_info.git_token,
+    );
+    let last_tag = git_service::last_tag_by_pattern(
+        tag_names,
+        SEMANTIC_VERSION_TAG_PATTERN,
+        DEFAULT_SEMANTIC_VERSION_TAG,
     );
     let version = version(args.scope, last_tag);
 

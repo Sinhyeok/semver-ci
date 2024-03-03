@@ -28,6 +28,7 @@ jobs:
     steps:
       - id: set_upcoming_version
         run: |
+          env
           export SCOPE=$(svci scope)
           echo "UPCOMING_VERSION=$(svci version)" >> "$GITHUB_OUTPUT"
     env:

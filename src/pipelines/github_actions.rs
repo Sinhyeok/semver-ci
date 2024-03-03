@@ -102,7 +102,7 @@ impl GithubActions {
         let github_ref = self.env_var("GITHUB_REF");
         let refspec = format!("{}:{}", github_ref, github_ref);
         git_service::fetch_refs(&repo, &self.git_username(), &self.git_token(), &[&refspec])
-            .unwrap_or_else(|e| panic!("Failed to fetch GITHUB_REF: {}", e));
+            .unwrap_or_else(|e| panic!("Failed to fetch GITHUB_REF: {}\n{}", github_ref, e));
 
         // Checkout GITHUB_REF
         git_service::checkout(&repo, &github_ref).unwrap_or_else(|e| panic!("{}", e));

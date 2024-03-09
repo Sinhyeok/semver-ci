@@ -1,6 +1,7 @@
 extern crate core;
 
 mod commands;
+mod config;
 mod git_service;
 mod http_service;
 mod pipelines;

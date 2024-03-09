@@ -1,5 +1,5 @@
-use crate::git_service;
 use crate::pipelines::Pipeline;
+use crate::{config, git_service};
 
 pub(crate) struct GitRepo;
 
@@ -9,29 +9,31 @@ impl Pipeline for GitRepo {
     }
 
     fn branch_name(&self) -> String {
-        git_service::branch_name(&self.target_path())
+        git_service::branch_name(&config::clone_target_path())
             .unwrap_or_else(|e| panic!("Failed to retrieve branch_name: {}", e))
     }
 
     fn short_commit_sha(&self) -> String {
-        git_service::short_commit_sha(&self.target_path())
+        git_service::short_commit_sha(&config::clone_target_path())
             .unwrap_or_else(|e| panic!("Failed to retrieve short_commit_sha: {}", e))
     }
 
     fn git_username(&self) -> String {
-        git_service::get_config_value(&self.target_path(), "user.name").unwrap_or("".to_string())
+        git_service::get_config_value(&config::clone_target_path(), "user.name")
+            .unwrap_or("".to_string())
     }
 
     fn git_email(&self) -> String {
-        git_service::get_config_value(&self.target_path(), "user.email").unwrap_or("".to_string())
+        git_service::get_config_value(&config::clone_target_path(), "user.email")
+            .unwrap_or("".to_string())
     }
 
     fn git_token(&self) -> String {
-        self.env_var("GIT_TOKEN")
+        config::env_var("GIT_TOKEN")
     }
 
     fn force_fetch_tags(&self) -> bool {
-        let flag = self.env_var_or("FORCE_FETCH_TAGS", "false");
+        let flag = config::env_var_or("FORCE_FETCH_TAGS", "false");
         flag.parse()
             .unwrap_or_else(|e| panic!("{}\nFORCE_FETCH_TAGS: {}", e, flag))
     }

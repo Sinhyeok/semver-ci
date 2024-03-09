@@ -1,6 +1,6 @@
-use crate::git_service;
 use crate::pipelines;
 use crate::semantic_version::SemanticVersion;
+use crate::{config, git_service};
 use clap::Args;
 use regex::Regex;
 
@@ -21,7 +21,7 @@ pub(crate) fn run(args: VersionCommandArgs) {
     let pipeline_info = pipeline.info();
 
     let tag_names = git_service::tag_names(
-        &pipeline_info.target_path,
+        &config::clone_target_path(),
         pipeline_info.force_fetch_tags,
         &pipeline_info.git_username,
         &pipeline_info.git_token,

@@ -1,6 +1,6 @@
 use crate::pipelines::Pipeline;
 use crate::release::Release;
-use crate::{git_service, http_service};
+use crate::{config, git_service, http_service};
 use git2::Repository;
 use reqwest::header::HeaderMap;
 use serde_json::{json, Value};
@@ -16,7 +16,7 @@ impl Pipeline for GithubActions {
         self.add_safe_directory();
 
         // Clone
-        if Repository::open(self.target_path()).is_err() {
+        if Repository::open(config::clone_target_path()).is_err() {
             self.clone();
         }
     }
@@ -26,16 +26,16 @@ impl Pipeline for GithubActions {
     }
 
     fn branch_name(&self) -> String {
-        self.env_var("GITHUB_REF_NAME")
+        config::env_var("GITHUB_REF_NAME")
     }
 
     fn short_commit_sha(&self) -> String {
-        let commit_sha = self.env_var("GITHUB_SHA");
+        let commit_sha = config::env_var("GITHUB_SHA");
         commit_sha[0..8].to_owned()
     }
 
     fn git_username(&self) -> String {
-        self.env_var("GITHUB_ACTOR")
+        config::env_var("GITHUB_ACTOR")
     }
 
     fn git_email(&self) -> String {
@@ -43,14 +43,14 @@ impl Pipeline for GithubActions {
     }
 
     fn git_token(&self) -> String {
-        self.env_var("GITHUB_TOKEN")
+        config::env_var("GITHUB_TOKEN")
     }
 
     fn create_release(&self, release: &Release) -> HashMap<String, Value> {
         let url = format!(
             "{}/repos/{}/releases",
-            self.env_var("GITHUB_API_URL"),
-            self.env_var("GITHUB_REPOSITORY")
+            config::env_var("GITHUB_API_URL"),
+            config::env_var("GITHUB_REPOSITORY")
         );
 
         let mut headers = HeaderMap::new();
@@ -65,7 +65,7 @@ impl Pipeline for GithubActions {
         body.insert("name", json!(release.name.clone()));
         body.insert("body", json!(release.description.clone()));
         body.insert("tag_name", json!(release.tag_name.clone()));
-        body.insert("target_commitish", json!(self.env_var("GITHUB_SHA")));
+        body.insert("target_commitish", json!(config::env_var("GITHUB_SHA")));
         body.insert(
             "generate_release_notes",
             json!(release.generate_release_notes),
@@ -77,19 +77,20 @@ impl Pipeline for GithubActions {
 
 impl GithubActions {
     fn add_safe_directory(&self) {
-        git_service::set_global_config_value("safe.directory", &self.target_path()).unwrap();
+        git_service::set_global_config_value("safe.directory", &config::clone_target_path())
+            .unwrap();
     }
 
     fn clone(&self) {
         // Clone repo
         let repo_url = format!(
             "{}/{}.git",
-            self.env_var("GITHUB_SERVER_URL"),
-            self.env_var("GITHUB_REPOSITORY")
+            config::env_var("GITHUB_SERVER_URL"),
+            config::env_var("GITHUB_REPOSITORY")
         );
         let repo = git_service::clone(
             &repo_url,
-            &self.target_path(),
+            &config::clone_target_path(),
             &self.git_username(),
             &self.git_token(),
             20,
@@ -97,7 +98,7 @@ impl GithubActions {
         .unwrap_or_else(|e| panic!("{}", e));
 
         // Fetch GITHUB_REF
-        let github_ref = self.env_var("GITHUB_REF");
+        let github_ref = config::env_var("GITHUB_REF");
         let refspec = format!("{}:{}", github_ref, github_ref);
         git_service::fetch_refs(&repo, &self.git_username(), &self.git_token(), &[&refspec])
             .unwrap_or_else(|e| panic!("Failed to fetch GITHUB_REF: {}\n{}", github_ref, e));

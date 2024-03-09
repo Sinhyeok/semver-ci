@@ -171,7 +171,7 @@ Arguments:
   <NAME>  Release name
 
 Options:
-      --description <DESCRIPTION>  [env: DESCRIPTION=] [default: ]
+      --description <DESCRIPTION>  Release description [env: DESCRIPTION=] [default: ]
       --tag-name <TAG_NAME>        [env: TAG_NAME=]
       --tag-message <TAG_MESSAGE>  Specify tag_message to create an annotated tag [env: TAG_MESSAGE=] [default: ]
   -g, --generate-release-notes     (Only for Github Actions) Automatically generate the body for this release. If body is specified, the body will be pre-pended to the automatically generated notes [env: GENERATE_RELEASE_NOTES=]

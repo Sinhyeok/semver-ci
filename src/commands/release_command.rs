@@ -6,6 +6,7 @@ pub(crate) struct ReleaseCommandArgs {
     /// Release name
     #[arg()]
     name: String,
+    /// Release description
     #[arg(long, env, default_value = "")]
     description: String,
     #[arg(long, env)]

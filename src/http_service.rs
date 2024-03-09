@@ -1,3 +1,4 @@
+use crate::config;
 use reqwest::header::HeaderMap;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -7,6 +8,13 @@ pub(crate) fn post(
     headers: Option<HeaderMap>,
     body: Option<HashMap<&str, Value>>,
 ) -> HashMap<String, Value> {
+    if config::is_test() {
+        println!("url: {}", url);
+        println!("headers: {:#?}", headers);
+        println!("body: {:#?}", body);
+        return HashMap::new();
+    }
+
     let mut request_builder = reqwest::blocking::Client::new().post(url);
     if headers.is_some() {
         request_builder = request_builder.headers(headers.unwrap());

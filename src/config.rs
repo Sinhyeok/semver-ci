@@ -11,3 +11,11 @@ pub(crate) fn env_var_or(name: &str, default: &str) -> String {
 pub(crate) fn clone_target_path() -> String {
     env::var("CLONE_TARGET_PATH").unwrap_or(".".to_string())
 }
+
+fn environment() -> String {
+    env::var("ENVIRONMENT").unwrap_or("production".to_string())
+}
+
+pub(crate) fn is_test() -> bool {
+    environment() == "test"
+}

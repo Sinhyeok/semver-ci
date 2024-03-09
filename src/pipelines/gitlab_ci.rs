@@ -51,9 +51,16 @@ impl Pipeline for GitlabCI {
             config::env_var("CI_JOB_TOKEN").parse().unwrap(),
         );
 
+        let description = self.release_notes(
+            release.description.clone(),
+            release.generate_release_notes,
+            release.previous_tag.clone(),
+            config::env_var("CI_COMMIT_SHA"),
+        );
+
         let mut body = HashMap::new();
         body.insert("name", json!(release.name.clone()));
-        body.insert("description", json!(release.description.clone()));
+        body.insert("description", json!(description));
         body.insert("tag_name", json!(release.tag_name.clone()));
         body.insert("tag_message", json!(release.tag_message.clone()));
         body.insert("ref", json!(config::env_var("CI_COMMIT_SHA")));
@@ -68,5 +75,65 @@ impl GitlabCI {
         let value = format!("{}.git", url);
         git_service::set_config_value(&config::clone_target_path(), name, &value)
             .unwrap_or_else(|e| panic!("{}", e));
+    }
+
+    fn release_notes(
+        &self,
+        prepend: String,
+        auto_generate: bool,
+        from: String,
+        to: String,
+    ) -> String {
+        let mut notes = prepend.clone();
+
+        if auto_generate {
+            notes += &self.compare(from, to);
+        }
+
+        notes
+    }
+
+    fn compare(&self, from: String, to: String) -> String {
+        let url = format!(
+            "{}/projects/{}/repository/compare",
+            config::env_var("CI_API_V4_URL"),
+            config::env_var("CI_PROJECT_ID")
+        );
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "JOB-TOKEN",
+            config::env_var("CI_JOB_TOKEN").parse().unwrap(),
+        );
+
+        let mut query = HashMap::new();
+        query.insert("from", from.as_str());
+        query.insert("to", to.as_str());
+
+        let parsed = http_service::get(url, Some(headers), Some(query));
+        let commits = parsed
+            .get("commits")
+            .unwrap()
+            .as_array()
+            .unwrap_or(&Vec::new())
+            .iter()
+            .map(|object| {
+                format!(
+                    "* [{}]({})",
+                    object.get("message").unwrap().as_str().unwrap(),
+                    object.get("web_url").unwrap().as_str().unwrap()
+                )
+            })
+            .collect::<Vec<String>>()
+            .join("\n");
+        let full_diff = parsed.get("web_url").unwrap().as_str().unwrap_or("");
+
+        format!(
+            r#"## What's Changed
+{}
+
+Full Changelog: {}"#,
+            commits, full_diff
+        )
     }
 }

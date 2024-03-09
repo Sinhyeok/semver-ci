@@ -9,21 +9,21 @@ impl Pipeline for GitRepo {
     }
 
     fn branch_name(&self) -> String {
-        git_service::branch_name()
+        git_service::branch_name(&self.target_path())
             .unwrap_or_else(|e| panic!("Failed to retrieve branch_name: {}", e))
     }
 
     fn short_commit_sha(&self) -> String {
-        git_service::short_commit_sha()
+        git_service::short_commit_sha(&self.target_path())
             .unwrap_or_else(|e| panic!("Failed to retrieve short_commit_sha: {}", e))
     }
 
     fn git_username(&self) -> String {
-        git_service::get_config_value("user.name").unwrap_or("".to_string())
+        git_service::get_config_value(&self.target_path(), "user.name").unwrap_or("".to_string())
     }
 
     fn git_email(&self) -> String {
-        git_service::get_config_value("user.email").unwrap_or("".to_string())
+        git_service::get_config_value(&self.target_path(), "user.email").unwrap_or("".to_string())
     }
 
     fn git_token(&self) -> String {

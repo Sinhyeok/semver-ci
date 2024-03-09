@@ -61,7 +61,9 @@ impl Pipeline for GitlabCI {
 
 impl GitlabCI {
     fn git_origin_pushurl(&self, url: String) {
-        git_service::set_config_value("remote.origin.pushurl", &format!("{}.git", url))
+        let name = "remote.origin.pushurl";
+        let value = format!("{}.git", url);
+        git_service::set_config_value(&self.target_path(), name, &value)
             .unwrap_or_else(|e| panic!("{}", e));
     }
 }

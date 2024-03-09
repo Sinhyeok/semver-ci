@@ -1,4 +1,4 @@
-use crate::pipelines::PipelineInfo;
+use git2::string_array::StringArray;
 use git2::{
     Config, Cred, CredentialType, Error, FetchOptions, ObjectType, Oid, PushOptions,
     RemoteCallbacks, Repository,
@@ -7,37 +7,40 @@ use regex::Regex;
 use std::env;
 use std::path::Path;
 
-const SEMANTIC_VERSION_TAG_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+)$";
+pub(crate) fn tag_names(
+    repo_path: &str,
+    force_fetch_tags: bool,
+    git_username: &str,
+    git_token: &str,
+) -> StringArray {
+    let repo =
+        Repository::open(repo_path).unwrap_or_else(|e| panic!("Failed to open git repo: {}", e));
 
-pub(crate) fn last_semantic_version_tag(default: String, pipeline_info: &PipelineInfo) -> String {
-    let repo = Repository::open(".").unwrap_or_else(|e| panic!("Failed to open git repo: {}", e));
-
-    let semantic_version_regex = Regex::new(SEMANTIC_VERSION_TAG_PATTERN).unwrap();
-
-    if pipeline_info.force_fetch_tags {
-        fetch_refs(
-            &repo,
-            &pipeline_info.git_username,
-            &pipeline_info.git_token,
-            &["refs/tags/*:refs/tags/*"],
-        )
-        .unwrap_or_else(|e| panic!("Failed to retrieve tags: {}", e));
+    if force_fetch_tags {
+        fetch_refs(&repo, git_username, git_token, &["refs/tags/*:refs/tags/*"])
+            .unwrap_or_else(|e| panic!("Failed to fetch tags: {}", e));
     }
 
-    let tag_names = repo
-        .tag_names(None)
-        .unwrap_or_else(|e| panic!("Failed to retrieve tags: {}", e));
+    repo.tag_names(None)
+        .unwrap_or_else(|e| panic!("Failed to retrieve tags: {}", e))
+}
 
+pub(crate) fn last_tag_by_pattern(
+    tag_names: StringArray,
+    tag_pattern: &str,
+    default: &str,
+) -> String {
+    let tag_regex = Regex::new(tag_pattern).unwrap();
     tag_names
         .iter()
         .flatten()
-        .filter(|t| semantic_version_regex.is_match(t))
+        .filter(|t| tag_regex.is_match(t))
         .last()
-        .map_or(default, |tag_name| tag_name.to_string())
+        .map_or(default.to_string(), |tag_name| tag_name.to_string())
 }
 
-pub(crate) fn branch_name() -> Result<String, Error> {
-    let repo = Repository::open(".")?;
+pub(crate) fn branch_name(repo_path: &str) -> Result<String, Error> {
+    let repo = Repository::open(repo_path)?;
 
     let head = repo.head()?;
 
@@ -54,38 +57,16 @@ pub(crate) fn branch_name() -> Result<String, Error> {
     }
 }
 
-pub(crate) fn short_commit_sha() -> Result<String, Error> {
-    let repo = Repository::open(".")?;
+pub(crate) fn short_commit_sha(repo_path: &str) -> Result<String, Error> {
+    let repo = Repository::open(repo_path)?;
 
     let commit_sha = repo.head()?.peel_to_commit()?.id().to_string();
 
     Ok(commit_sha[..8].to_string())
 }
 
-pub(crate) fn tag_and_push(
-    pipeline_info: &PipelineInfo,
-    tag_name: &str,
-    tag_message: &str,
-) -> Result<(), Error> {
-    let repo = Repository::open(".")?;
-
-    tag(
-        &repo,
-        tag_name,
-        tag_message,
-        &pipeline_info.git_username,
-        &pipeline_info.git_email,
-    )?;
-    push_tag(
-        &repo,
-        &pipeline_info.git_username,
-        &pipeline_info.git_token,
-        tag_name,
-    )
-}
-
-pub(crate) fn get_config_value(name: &str) -> Option<String> {
-    let repo = match Repository::open(".") {
+pub(crate) fn get_config_value(repo_path: &str, name: &str) -> Option<String> {
+    let repo = match Repository::open(repo_path) {
         Ok(repo) => repo,
         Err(_) => return None,
     };
@@ -103,8 +84,8 @@ pub(crate) fn get_config_value(name: &str) -> Option<String> {
     value
 }
 
-pub(crate) fn set_config_value(name: &str, value: &str) -> Result<(), Error> {
-    let repo = Repository::open(".")?;
+pub(crate) fn set_config_value(repo_path: &str, name: &str, value: &str) -> Result<(), Error> {
+    let repo = Repository::open(repo_path)?;
 
     let mut config = repo.config()?;
     config.set_str(name, value)
@@ -156,6 +137,37 @@ pub(crate) fn fetch_refs(
         .fetch(refspecs, Some(&mut fetch_options), None)
 }
 
+pub(crate) fn tag(
+    repo: &Repository,
+    tag_name: &str,
+    tag_message: &str,
+    user: &str,
+    email: &str,
+) -> Result<Oid, Error> {
+    let head = repo.head()?;
+    let git_object = head.peel(ObjectType::Any)?;
+    let tagger = git2::Signature::now(user, email)?;
+
+    repo.tag(tag_name, &git_object, &tagger, tag_message, false)
+}
+
+pub(crate) fn push_tag(
+    repo: &Repository,
+    user: &str,
+    token: &str,
+    tag_name: &str,
+) -> Result<(), Error> {
+    let mut push_options = PushOptions::new();
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(|_url, username, cred| git_auth_callback(cred, username, user, token));
+
+    push_options.remote_callbacks(callbacks);
+
+    let ref_spec = format!("refs/tags/{}", tag_name);
+    repo.find_remote("origin")?
+        .push(&[ref_spec], Some(&mut push_options))
+}
+
 fn git_auth_callback(
     cred: CredentialType,
     username: Option<&str>,
@@ -187,30 +199,4 @@ fn ssh_key_passphrase() -> Option<String> {
         Ok(s) => Some(s),
         Err(_e) => None,
     }
-}
-
-fn tag(
-    repo: &Repository,
-    tag_name: &str,
-    tag_message: &str,
-    user: &str,
-    email: &str,
-) -> Result<Oid, Error> {
-    let head = repo.head()?;
-    let git_object = head.peel(ObjectType::Any)?;
-    let tagger = git2::Signature::now(user, email)?;
-
-    repo.tag(tag_name, &git_object, &tagger, tag_message, false)
-}
-
-fn push_tag(repo: &Repository, user: &str, token: &str, tag_name: &str) -> Result<(), Error> {
-    let mut push_options = PushOptions::new();
-    let mut callbacks = RemoteCallbacks::new();
-    callbacks.credentials(|_url, username, cred| git_auth_callback(cred, username, user, token));
-
-    push_options.remote_callbacks(callbacks);
-
-    let ref_spec = format!("refs/tags/{}", tag_name);
-    repo.find_remote("origin")?
-        .push(&[ref_spec], Some(&mut push_options))
 }

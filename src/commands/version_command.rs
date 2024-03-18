@@ -37,7 +37,7 @@ pub(crate) fn run(args: VersionCommandArgs) {
 }
 
 fn version(scope: String, last_tag: String) -> String {
-    let mut semantic_version = SemanticVersion::from_string(last_tag[1..].to_string())
+    let mut semantic_version = SemanticVersion::from_string(last_tag.clone())
         .unwrap_or_else(|e| panic!("{}: {}", e, last_tag));
 
     semantic_version.increase_by_scope(scope).to_string(true)

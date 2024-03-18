@@ -1,3 +1,4 @@
+use crate::semantic_version::SemanticVersion;
 use git2::string_array::StringArray;
 use git2::{
     Config, Cred, CredentialType, Error, FetchOptions, ObjectType, Oid, PushOptions,
@@ -5,6 +6,7 @@ use git2::{
 };
 use regex::Regex;
 use std::env;
+use std::ops::Not;
 use std::path::Path;
 
 pub(crate) fn tag_names(
@@ -31,12 +33,25 @@ pub(crate) fn last_tag_by_pattern(
     default: &str,
 ) -> String {
     let tag_regex = Regex::new(tag_pattern).unwrap();
-    tag_names
-        .iter()
-        .flatten()
-        .filter(|t| tag_regex.is_match(t))
-        .last()
-        .map_or(default.to_string(), |tag_name| tag_name.to_string())
+    let mut valid_versions: Vec<SemanticVersion> = vec![];
+
+    for tag_name in tag_names.iter().flatten() {
+        if tag_regex.is_match(tag_name).not() {
+            continue;
+        }
+
+        match SemanticVersion::from_string(tag_name.to_string()) {
+            Ok(version) => valid_versions.push(version),
+            Err(msg) => panic!("{}", msg),
+        }
+    }
+
+    valid_versions.sort_by(|a, b| b.cmp(a));
+
+    match valid_versions.first() {
+        Some(version) => version.to_string(true),
+        None => default.to_string(),
+    }
 }
 
 pub(crate) fn branch_name(repo_path: &str) -> Result<String, Error> {

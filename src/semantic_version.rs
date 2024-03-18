@@ -1,7 +1,25 @@
+use std::cmp::Ordering;
+
+#[derive(Eq, PartialEq, Debug)]
 pub struct SemanticVersion {
     pub major: u64,
     pub minor: u64,
     pub patch: u64,
+}
+
+impl PartialOrd for SemanticVersion {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for SemanticVersion {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.major
+            .cmp(&other.major)
+            .then_with(|| self.minor.cmp(&other.minor))
+            .then_with(|| self.patch.cmp(&other.patch))
+    }
 }
 
 impl SemanticVersion {
@@ -34,7 +52,12 @@ impl SemanticVersion {
     }
 
     pub fn from_string(version_string: String) -> Result<Self, String> {
-        let parts: Vec<&str> = version_string.split('.').collect();
+        let prefix_stripped = match version_string.strip_prefix('v') {
+            Some(stripped) => stripped.to_string(),
+            None => version_string,
+        };
+
+        let parts: Vec<&str> = prefix_stripped.split('.').collect();
 
         if parts.len() != 3 {
             return Err("Invalid version string format".to_string());

@@ -30,6 +30,9 @@ pub(crate) trait Pipeline {
     fn env_var_or(&self, name: &str, default: &str) -> String {
         env::var(name).unwrap_or(default.to_string())
     }
+    fn target_path(&self) -> String {
+        self.env_var_or("CLONE_TARGET_PATH", ".")
+    }
 }
 
 enum Pipelines {
@@ -58,6 +61,7 @@ pub(crate) struct PipelineInfo {
     pub git_email: String,
     pub git_token: String,
     pub force_fetch_tags: bool,
+    pub target_path: String,
 }
 
 impl PipelineInfo {
@@ -73,6 +77,7 @@ impl PipelineInfo {
             git_email: pipeline.git_email(),
             git_token: pipeline.git_token(),
             force_fetch_tags: pipeline.force_fetch_tags(),
+            target_path: pipeline.target_path(),
         }
     }
 }

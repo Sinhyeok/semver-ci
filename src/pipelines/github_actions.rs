@@ -12,14 +12,12 @@ pub const GITHUB_ACTIONS: &str = "GITHUB_ACTIONS";
 
 impl Pipeline for GithubActions {
     fn init(&self) {
-        let target_path = self.env_var_or("CLONE_TARGET_PATH", ".");
-
         // Git config: "safe.directory=."
-        Self::add_safe_directory(&target_path);
+        self.add_safe_directory();
 
         // Clone
-        if Repository::open(&target_path).is_err() {
-            self.clone(&target_path);
+        if Repository::open(self.target_path()).is_err() {
+            self.clone();
         }
     }
 
@@ -78,11 +76,11 @@ impl Pipeline for GithubActions {
 }
 
 impl GithubActions {
-    fn add_safe_directory(path: &str) {
-        git_service::set_global_config_value("safe.directory", path).unwrap();
+    fn add_safe_directory(&self) {
+        git_service::set_global_config_value("safe.directory", &self.target_path()).unwrap();
     }
 
-    fn clone(&self, target_path: &str) {
+    fn clone(&self) {
         // Clone repo
         let repo_url = format!(
             "{}/{}.git",
@@ -91,7 +89,7 @@ impl GithubActions {
         );
         let repo = git_service::clone(
             &repo_url,
-            target_path,
+            &self.target_path(),
             &self.git_username(),
             &self.git_token(),
             20,
@@ -102,7 +100,7 @@ impl GithubActions {
         let github_ref = self.env_var("GITHUB_REF");
         let refspec = format!("{}:{}", github_ref, github_ref);
         git_service::fetch_refs(&repo, &self.git_username(), &self.git_token(), &[&refspec])
-            .unwrap_or_else(|e| panic!("Failed to fetch GITHUB_REF: {}", e));
+            .unwrap_or_else(|e| panic!("Failed to fetch GITHUB_REF: {}\n{}", github_ref, e));
 
         // Checkout GITHUB_REF
         git_service::checkout(&repo, &github_ref).unwrap_or_else(|e| panic!("{}", e));

@@ -1,7 +1,22 @@
 ![development workflow](https://github.com/Sinhyeok/semver-ci/actions/workflows/development.yml/badge.svg)
 ![publish workflow](https://github.com/Sinhyeok/semver-ci/actions/workflows/publish.yml/badge.svg)
-# semver-ci
-Semantic Versioning for CI/CD
+
+# Semver-CI
+
+Welcome to Semver-CI, an open-source project designed to seamlessly integrate semantic versioning into your continuous integration (CI) workflow. This tool automates the process of versioning releases, ensuring that every new build adheres strictly to the [Semantic Versioning](https://semver.org/) guidelines. With Semver-CI, developers can focus more on their code and less on the intricacies of version management.
+
+## Key Features:
+
+- **Automated Version Management**: Automatically increments your project's version based on commit messages and predefined rules.
+- **Customizable Rules**: Define how your version numbers increase (major, minor, patch) through simple configuration settings.
+- **Integration with CI Tools**: Easily integrates with popular CI services like GitHub Actions, GitLab CI, and Jenkins to streamline your development pipeline.
+- **Release Drafting**: Automatically generates release notes and drafts new releases with the updated version numbers.
+
+## Why Semver-CI?
+
+In today's fast-paced development environment, managing version numbers can be tedious and error-prone. Semver-CI takes the hassle out of versioning, ensuring your project's releases are consistent, predictable, and in compliance with semantic versioning principles. It's the perfect tool for teams looking to automate their release process and maintain high-quality software.
+
+Start integrating semantic versioning into your CI workflow with Semver-CI today and make your release process as efficient and error-free as possible.
 
 ## Getting Started
 ### GitHub Actions

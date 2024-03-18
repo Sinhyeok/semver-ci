@@ -7,7 +7,7 @@ Welcome to Semver-CI, an open-source project designed to seamlessly integrate se
 
 ## Key Features:
 
-- **Automated Version Management**: Automatically increments your project's version based on commit messages and predefined rules.
+- **Automated Version Management**: Automatically increments your project's version based on branch names, tags and predefined rules.
 - **Customizable Rules**: Define how your version numbers increase (major, minor, patch) through simple configuration settings.
 - **Integration with CI Tools**: Easily integrates with popular CI services like GitHub Actions, GitLab CI, and Jenkins to streamline your development pipeline.
 - **Release Drafting**: Automatically generates release notes and drafts new releases with the updated version numbers.

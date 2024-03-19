@@ -1,3 +1,4 @@
+use crate::pipelines;
 use crate::release::Release;
 use clap::Args;
 
@@ -43,6 +44,8 @@ pub(crate) fn run(args: ReleaseCommandArgs) {
         previous_tag: args.previous_tag,
     };
 
-    let parsed = release.create();
+    let pipeline = pipelines::current_pipeline();
+    let parsed = pipeline.create_release(&release);
+
     println!("{:#?}", parsed);
 }

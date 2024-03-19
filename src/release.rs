@@ -12,6 +12,7 @@ pub(crate) struct Release {
 
 impl Release {
     pub(crate) fn create(&self) -> HashMap<String, Value> {
-        pipelines::create_release(self)
+        let pipeline = pipelines::current_pipeline();
+        pipeline.create_release(self)
     }
 }

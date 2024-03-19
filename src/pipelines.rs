@@ -35,23 +35,18 @@ pub(crate) trait Pipeline {
     }
 }
 
-enum Pipelines {
-    GithubActions(GithubActions),
-    GitlabCI(GitlabCI),
-    GitRepo(GitRepo),
-}
-
-fn pipelines() -> Pipelines {
-    if env::var(GITHUB_ACTIONS).map_or(false, |v| v == "true") {
-        eprintln!("on GITHUB_ACTIONS");
-        Pipelines::GithubActions(GithubActions)
+pub(crate) fn current_pipeline() -> &'static dyn Pipeline {
+    let pipeline = if env::var(GITHUB_ACTIONS).map_or(false, |v| v == "true") {
+        &GithubActions as &dyn Pipeline
     } else if env::var(GITLAB_CI).map_or(false, |v| v == "true") {
-        eprintln!("on GITLAB_CI");
-        Pipelines::GitlabCI(GitlabCI)
+        &GitlabCI as &dyn Pipeline
     } else {
-        eprintln!("on GIT Repo");
-        Pipelines::GitRepo(GitRepo)
-    }
+        &GitRepo as &dyn Pipeline
+    };
+
+    eprintln!("on {}", pipeline.name());
+
+    pipeline
 }
 
 pub(crate) struct PipelineInfo {
@@ -65,11 +60,7 @@ pub(crate) struct PipelineInfo {
 }
 
 impl PipelineInfo {
-    fn new(pipeline: &dyn Pipeline, init: bool) -> PipelineInfo {
-        if init {
-            pipeline.init();
-        }
-
+    pub(crate) fn new(pipeline: &dyn Pipeline) -> PipelineInfo {
         PipelineInfo {
             branch_name: pipeline.branch_name(),
             short_commit_sha: pipeline.short_commit_sha(),
@@ -79,21 +70,5 @@ impl PipelineInfo {
             force_fetch_tags: pipeline.force_fetch_tags(),
             target_path: pipeline.target_path(),
         }
-    }
-}
-
-pub(crate) fn pipeline_info(init: bool) -> PipelineInfo {
-    match pipelines() {
-        Pipelines::GithubActions(p) => PipelineInfo::new(&p, init),
-        Pipelines::GitlabCI(p) => PipelineInfo::new(&p, init),
-        Pipelines::GitRepo(p) => PipelineInfo::new(&p, init),
-    }
-}
-
-pub(crate) fn create_release(release: &Release) -> HashMap<String, Value> {
-    match pipelines() {
-        Pipelines::GithubActions(p) => p.create_release(release),
-        Pipelines::GitlabCI(p) => p.create_release(release),
-        Pipelines::GitRepo(p) => p.create_release(release),
     }
 }

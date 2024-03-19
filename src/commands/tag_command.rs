@@ -16,7 +16,7 @@ pub(crate) struct TagCommandArgs {
 pub(crate) fn run(args: TagCommandArgs) {
     let pipeline = pipelines::current_pipeline();
     pipeline.init();
-    let pipeline_info = PipelineInfo::new(pipeline);
+    let pipeline_info = pipeline.info();
 
     let mut tag_name = args.tag_name.as_str();
     if args.strip_prefix_v {

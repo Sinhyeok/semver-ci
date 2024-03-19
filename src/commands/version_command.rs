@@ -18,7 +18,7 @@ pub(crate) struct VersionCommandArgs {
 pub(crate) fn run(args: VersionCommandArgs) {
     let pipeline = pipelines::current_pipeline();
     pipeline.init();
-    let pipeline_info = pipelines::PipelineInfo::new(pipeline);
+    let pipeline_info = pipeline.info();
 
     let tag_names = git_service::tag_names(
         &pipeline_info.target_path,

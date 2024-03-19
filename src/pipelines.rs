@@ -33,6 +33,18 @@ pub(crate) trait Pipeline {
     fn target_path(&self) -> String {
         self.env_var_or("CLONE_TARGET_PATH", ".")
     }
+
+    fn info(&self) -> PipelineInfo {
+        PipelineInfo {
+            branch_name: self.branch_name(),
+            short_commit_sha: self.short_commit_sha(),
+            git_username: self.git_username(),
+            git_email: self.git_email(),
+            git_token: self.git_token(),
+            force_fetch_tags: self.force_fetch_tags(),
+            target_path: self.target_path(),
+        }
+    }
 }
 
 pub(crate) fn current_pipeline() -> &'static dyn Pipeline {
@@ -57,18 +69,4 @@ pub(crate) struct PipelineInfo {
     pub git_token: String,
     pub force_fetch_tags: bool,
     pub target_path: String,
-}
-
-impl PipelineInfo {
-    pub(crate) fn new(pipeline: &dyn Pipeline) -> PipelineInfo {
-        PipelineInfo {
-            branch_name: pipeline.branch_name(),
-            short_commit_sha: pipeline.short_commit_sha(),
-            git_username: pipeline.git_username(),
-            git_email: pipeline.git_email(),
-            git_token: pipeline.git_token(),
-            force_fetch_tags: pipeline.force_fetch_tags(),
-            target_path: pipeline.target_path(),
-        }
-    }
 }

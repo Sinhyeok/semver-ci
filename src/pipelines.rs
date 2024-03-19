@@ -33,25 +33,32 @@ pub(crate) trait Pipeline {
     fn target_path(&self) -> String {
         self.env_var_or("CLONE_TARGET_PATH", ".")
     }
-}
 
-enum Pipelines {
-    GithubActions(GithubActions),
-    GitlabCI(GitlabCI),
-    GitRepo(GitRepo),
-}
-
-fn pipelines() -> Pipelines {
-    if env::var(GITHUB_ACTIONS).map_or(false, |v| v == "true") {
-        eprintln!("on GITHUB_ACTIONS");
-        Pipelines::GithubActions(GithubActions)
-    } else if env::var(GITLAB_CI).map_or(false, |v| v == "true") {
-        eprintln!("on GITLAB_CI");
-        Pipelines::GitlabCI(GitlabCI)
-    } else {
-        eprintln!("on GIT Repo");
-        Pipelines::GitRepo(GitRepo)
+    fn info(&self) -> PipelineInfo {
+        PipelineInfo {
+            branch_name: self.branch_name(),
+            short_commit_sha: self.short_commit_sha(),
+            git_username: self.git_username(),
+            git_email: self.git_email(),
+            git_token: self.git_token(),
+            force_fetch_tags: self.force_fetch_tags(),
+            target_path: self.target_path(),
+        }
     }
+}
+
+pub(crate) fn current_pipeline() -> &'static dyn Pipeline {
+    let pipeline = if env::var(GITHUB_ACTIONS).map_or(false, |v| v == "true") {
+        &GithubActions as &dyn Pipeline
+    } else if env::var(GITLAB_CI).map_or(false, |v| v == "true") {
+        &GitlabCI as &dyn Pipeline
+    } else {
+        &GitRepo as &dyn Pipeline
+    };
+
+    eprintln!("on {}", pipeline.name());
+
+    pipeline
 }
 
 pub(crate) struct PipelineInfo {
@@ -62,38 +69,4 @@ pub(crate) struct PipelineInfo {
     pub git_token: String,
     pub force_fetch_tags: bool,
     pub target_path: String,
-}
-
-impl PipelineInfo {
-    fn new(pipeline: &dyn Pipeline, init: bool) -> PipelineInfo {
-        if init {
-            pipeline.init();
-        }
-
-        PipelineInfo {
-            branch_name: pipeline.branch_name(),
-            short_commit_sha: pipeline.short_commit_sha(),
-            git_username: pipeline.git_username(),
-            git_email: pipeline.git_email(),
-            git_token: pipeline.git_token(),
-            force_fetch_tags: pipeline.force_fetch_tags(),
-            target_path: pipeline.target_path(),
-        }
-    }
-}
-
-pub(crate) fn pipeline_info(init: bool) -> PipelineInfo {
-    match pipelines() {
-        Pipelines::GithubActions(p) => PipelineInfo::new(&p, init),
-        Pipelines::GitlabCI(p) => PipelineInfo::new(&p, init),
-        Pipelines::GitRepo(p) => PipelineInfo::new(&p, init),
-    }
-}
-
-pub(crate) fn create_release(release: &Release) -> HashMap<String, Value> {
-    match pipelines() {
-        Pipelines::GithubActions(p) => p.create_release(release),
-        Pipelines::GitlabCI(p) => p.create_release(release),
-        Pipelines::GitRepo(p) => p.create_release(release),
-    }
 }

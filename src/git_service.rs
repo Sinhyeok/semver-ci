@@ -15,8 +15,7 @@ pub(crate) fn tag_names(
     git_username: &str,
     git_token: &str,
 ) -> Result<StringArray, Error> {
-    let repo =
-        Repository::open(repo_path)?;
+    let repo = Repository::open(repo_path)?;
 
     if force_fetch_tags {
         fetch_refs(&repo, git_username, git_token, &["refs/tags/*:refs/tags/*"])?;
@@ -26,7 +25,7 @@ pub(crate) fn tag_names(
 }
 
 pub(crate) fn last_tag_by_pattern(
-    tag_names: StringArray,
+    tag_names: &StringArray,
     tag_pattern: &str,
     default: &str,
 ) -> String {

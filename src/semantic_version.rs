@@ -58,18 +58,20 @@ impl SemanticVersion {
         self.prerelease_number += 1;
     }
 
-    pub fn increase_by_scope(&mut self, scope: String) -> &mut SemanticVersion {
+    pub fn increase_by_scope(&mut self, scope: String) -> SemanticVersion {
+        let mut increased = self.clone();
+
         match scope.as_str() {
-            "major" => self.increase_major(),
-            "minor" => self.increase_minor(),
-            "patch" => self.increase_patch(),
-            "prerelease" => self.increase_prerelease_number(),
+            "major" => increased.increase_major(),
+            "minor" => increased.increase_minor(),
+            "patch" => increased.increase_patch(),
+            "prerelease" => increased.increase_prerelease_number(),
             _ => {
                 panic!("Invalid scope: {}", scope)
             }
         }
 
-        self
+        increased
     }
 
     pub fn from_string(version_string: String) -> Result<Self, String> {

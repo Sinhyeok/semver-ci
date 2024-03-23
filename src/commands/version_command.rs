@@ -28,7 +28,7 @@ pub(crate) fn run(args: VersionCommandArgs) {
     )
     .unwrap_or_else(|e| panic!("Failed to retrieve tags: {}", e));
 
-    let mut last_semantic_version = git_service::last_tag_by_pattern(
+    let mut upcoming_version = git_service::last_tag_by_pattern(
         &tag_names,
         SEMANTIC_VERSION_TAG_PATTERN,
         SemanticVersion {
@@ -38,19 +38,19 @@ pub(crate) fn run(args: VersionCommandArgs) {
             prerelease_stage: "".to_string(),
             prerelease_number: 0,
         },
-    );
-    last_semantic_version.increase_by_scope(args.scope);
+    )
+    .increase_by_scope(args.scope);
 
     let prerelease_stage = prerelease_stage(&pipeline_info.branch_name);
     let version = if prerelease_stage.is_empty() {
-        last_semantic_version.to_string(true)
+        upcoming_version.to_string(true)
     } else {
-        last_semantic_version.prerelease_stage = prerelease_stage.clone();
+        upcoming_version.prerelease_stage = prerelease_stage.clone();
 
         prerelease_version(
             &tag_names,
             prerelease_stage,
-            last_semantic_version,
+            upcoming_version,
             pipeline_info.short_commit_sha,
         )
     };
@@ -78,18 +78,17 @@ fn prerelease_version(
     last_semantic_version: SemanticVersion,
     short_commit_sha: String,
 ) -> String {
-    let mut last_prerelease_semantic_version = git_service::last_tag_by_pattern(
+    let upcoming_prerelease_version = git_service::last_tag_by_pattern(
         tag_names,
         &format!(
             r"^v?([0-9]+\.[0-9]+\.[0-9]+)-{}\.[0-9]+($|\.)",
             prerelease_stage
         ),
         last_semantic_version,
-    );
+    )
+    .increase_by_scope("prerelease".to_string());
 
-    let prerelease_version = last_prerelease_semantic_version
-        .increase_by_scope("prerelease".to_string())
-        .to_string(true);
+    let prerelease_version = upcoming_prerelease_version.to_string(true);
 
     if prerelease_stage == "dev" {
         format!("{}.{}", prerelease_version, short_commit_sha)

@@ -63,13 +63,15 @@ fn prerelease_stage(branch_name: &str) -> String {
     let release_candidate_regex =
         Regex::new(RELEASE_CANDIDATE_PATTERN).unwrap_or_else(|e| panic!("{}", e));
 
-    if dev_regex.is_match(branch_name) {
-        "dev".to_string()
+    let stage = if dev_regex.is_match(branch_name) {
+        "dev"
     } else if release_candidate_regex.is_match(branch_name) {
-        "rc".to_string()
+        "rc"
     } else {
-        "".to_string()
-    }
+        ""
+    };
+
+    stage.to_string()
 }
 
 fn prerelease_version(

@@ -27,8 +27,8 @@ pub(crate) fn tag_names(
 pub(crate) fn last_tag_by_pattern(
     tag_names: &StringArray,
     tag_pattern: &str,
-    default: &str,
-) -> String {
+    default: SemanticVersion,
+) -> SemanticVersion {
     let tag_regex = Regex::new(tag_pattern).unwrap();
     let mut valid_versions: Vec<SemanticVersion> = vec![];
 
@@ -43,11 +43,11 @@ pub(crate) fn last_tag_by_pattern(
         }
     }
 
-    valid_versions.sort_by(|a, b| b.cmp(a));
-
-    match valid_versions.first() {
-        Some(version) => version.to_string(true),
-        None => default.to_string(),
+    if valid_versions.is_empty() {
+        default
+    } else {
+        valid_versions.sort_by(|a, b| b.cmp(a));
+        valid_versions[0].clone()
     }
 }
 

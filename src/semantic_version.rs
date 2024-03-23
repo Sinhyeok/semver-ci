@@ -26,20 +26,36 @@ impl Ord for SemanticVersion {
     }
 }
 
+impl Clone for SemanticVersion {
+    fn clone(&self) -> Self {
+        SemanticVersion {
+            major: self.major,
+            minor: self.minor,
+            patch: self.patch,
+            prerelease_stage: self.prerelease_stage.clone(),
+            prerelease_number: self.prerelease_number,
+        }
+    }
+}
+
 impl SemanticVersion {
-    pub fn increase_major(&mut self) {
+    fn increase_major(&mut self) {
         self.major += 1;
         self.minor = 0;
         self.patch = 0;
     }
 
-    pub fn increase_minor(&mut self) {
+    fn increase_minor(&mut self) {
         self.minor += 1;
         self.patch = 0;
     }
 
-    pub fn increase_patch(&mut self) {
+    fn increase_patch(&mut self) {
         self.patch += 1;
+    }
+
+    fn increase_prerelease_number(&mut self) {
+        self.prerelease_number += 1;
     }
 
     pub fn increase_by_scope(&mut self, scope: String) -> &mut SemanticVersion {
@@ -47,6 +63,7 @@ impl SemanticVersion {
             "major" => self.increase_major(),
             "minor" => self.increase_minor(),
             "patch" => self.increase_patch(),
+            "prerelease" => self.increase_prerelease_number(),
             _ => {
                 panic!("Invalid scope: {}", scope)
             }

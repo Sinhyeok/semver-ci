@@ -14,17 +14,15 @@ pub(crate) fn tag_names(
     force_fetch_tags: bool,
     git_username: &str,
     git_token: &str,
-) -> StringArray {
+) -> Result<StringArray, Error> {
     let repo =
-        Repository::open(repo_path).unwrap_or_else(|e| panic!("Failed to open git repo: {}", e));
+        Repository::open(repo_path)?;
 
     if force_fetch_tags {
-        fetch_refs(&repo, git_username, git_token, &["refs/tags/*:refs/tags/*"])
-            .unwrap_or_else(|e| panic!("Failed to fetch tags: {}", e));
+        fetch_refs(&repo, git_username, git_token, &["refs/tags/*:refs/tags/*"])?;
     }
 
     repo.tag_names(None)
-        .unwrap_or_else(|e| panic!("Failed to retrieve tags: {}", e))
 }
 
 pub(crate) fn last_tag_by_pattern(
@@ -42,7 +40,7 @@ pub(crate) fn last_tag_by_pattern(
 
         match SemanticVersion::from_string(tag_name.to_string()) {
             Ok(version) => valid_versions.push(version),
-            Err(msg) => panic!("{}", msg),
+            Err(msg) => eprintln!("{}", msg),
         }
     }
 

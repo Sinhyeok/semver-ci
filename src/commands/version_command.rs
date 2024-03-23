@@ -25,7 +25,7 @@ pub(crate) fn run(args: VersionCommandArgs) {
         pipeline_info.force_fetch_tags,
         &pipeline_info.git_username,
         &pipeline_info.git_token,
-    );
+    ).unwrap_or_else(|e| panic!("Failed to retrieve tags: {}", e));
     let last_tag = git_service::last_tag_by_pattern(
         tag_names,
         SEMANTIC_VERSION_TAG_PATTERN,

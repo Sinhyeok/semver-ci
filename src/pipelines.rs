@@ -24,15 +24,6 @@ pub(crate) trait Pipeline {
     fn create_release(&self, _release: &Release) -> HashMap<String, Value> {
         panic!("Not supported pipeline: {}", self.name())
     }
-    fn env_var(&self, name: &str) -> String {
-        env::var(name).unwrap_or_else(|e| panic!("{}: \"{}\"", e, name))
-    }
-    fn env_var_or(&self, name: &str, default: &str) -> String {
-        env::var(name).unwrap_or(default.to_string())
-    }
-    fn target_path(&self) -> String {
-        self.env_var_or("CLONE_TARGET_PATH", ".")
-    }
 
     fn info(&self) -> PipelineInfo {
         PipelineInfo {
@@ -42,7 +33,6 @@ pub(crate) trait Pipeline {
             git_email: self.git_email(),
             git_token: self.git_token(),
             force_fetch_tags: self.force_fetch_tags(),
-            target_path: self.target_path(),
         }
     }
 }
@@ -68,5 +58,4 @@ pub(crate) struct PipelineInfo {
     pub git_email: String,
     pub git_token: String,
     pub force_fetch_tags: bool,
-    pub target_path: String,
 }

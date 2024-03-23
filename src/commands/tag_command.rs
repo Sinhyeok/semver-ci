@@ -1,5 +1,5 @@
 use crate::pipelines::PipelineInfo;
-use crate::{git_service, pipelines};
+use crate::{config, git_service, pipelines};
 use clap::Args;
 use git2::{Error, Repository};
 
@@ -33,7 +33,7 @@ fn tag_and_push(
     tag_name: &str,
     tag_message: &str,
 ) -> Result<(), Error> {
-    let repo = Repository::open(&pipeline_info.target_path)?;
+    let repo = Repository::open(config::clone_target_path())?;
 
     git_service::tag(
         &repo,

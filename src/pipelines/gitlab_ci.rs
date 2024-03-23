@@ -1,6 +1,6 @@
 use crate::pipelines::Pipeline;
 use crate::release::Release;
-use crate::{git_service, http_service};
+use crate::{config, git_service, http_service};
 use reqwest::header::HeaderMap;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -11,7 +11,7 @@ pub const GITLAB_CI: &str = "GITLAB_CI";
 
 impl Pipeline for GitlabCI {
     fn init(&self) {
-        self.git_origin_pushurl(self.env_var("CI_PROJECT_URL"));
+        self.git_origin_pushurl(config::env_var("CI_PROJECT_URL"));
     }
 
     fn name(&self) -> String {
@@ -19,11 +19,11 @@ impl Pipeline for GitlabCI {
     }
 
     fn branch_name(&self) -> String {
-        self.env_var("CI_COMMIT_BRANCH")
+        config::env_var("CI_COMMIT_BRANCH")
     }
 
     fn short_commit_sha(&self) -> String {
-        self.env_var("CI_COMMIT_SHORT_SHA")
+        config::env_var("CI_COMMIT_SHORT_SHA")
     }
 
     fn git_username(&self) -> String {
@@ -31,29 +31,39 @@ impl Pipeline for GitlabCI {
     }
 
     fn git_email(&self) -> String {
-        self.env_var("GITLAB_USER_EMAIL")
+        config::env_var("GITLAB_USER_EMAIL")
     }
 
     fn git_token(&self) -> String {
-        self.env_var_or("SEMVER_CI_TOKEN", &self.env_var("CI_JOB_TOKEN"))
+        config::env_var_or("SEMVER_CI_TOKEN", &config::env_var("CI_JOB_TOKEN"))
     }
 
     fn create_release(&self, release: &Release) -> HashMap<String, Value> {
         let url = format!(
             "{}/projects/{}/releases",
-            self.env_var("CI_API_V4_URL"),
-            self.env_var("CI_PROJECT_ID")
+            config::env_var("CI_API_V4_URL"),
+            config::env_var("CI_PROJECT_ID")
         );
 
         let mut headers = HeaderMap::new();
-        headers.insert("JOB-TOKEN", self.env_var("CI_JOB_TOKEN").parse().unwrap());
+        headers.insert(
+            "JOB-TOKEN",
+            config::env_var("CI_JOB_TOKEN").parse().unwrap(),
+        );
+
+        let description = self.release_notes(
+            release.description.clone(),
+            release.generate_release_notes,
+            release.previous_tag.clone(),
+            config::env_var("CI_COMMIT_SHA"),
+        );
 
         let mut body = HashMap::new();
         body.insert("name", json!(release.name.clone()));
-        body.insert("description", json!(release.description.clone()));
+        body.insert("description", json!(description));
         body.insert("tag_name", json!(release.tag_name.clone()));
         body.insert("tag_message", json!(release.tag_message.clone()));
-        body.insert("ref", json!(self.env_var("CI_COMMIT_SHA")));
+        body.insert("ref", json!(config::env_var("CI_COMMIT_SHA")));
 
         http_service::post(url, Some(headers), Some(body))
     }
@@ -63,7 +73,67 @@ impl GitlabCI {
     fn git_origin_pushurl(&self, url: String) {
         let name = "remote.origin.pushurl";
         let value = format!("{}.git", url);
-        git_service::set_config_value(&self.target_path(), name, &value)
+        git_service::set_config_value(&config::clone_target_path(), name, &value)
             .unwrap_or_else(|e| panic!("{}", e));
+    }
+
+    fn release_notes(
+        &self,
+        prepend: String,
+        auto_generate: bool,
+        from: String,
+        to: String,
+    ) -> String {
+        let mut notes = prepend.clone();
+
+        if auto_generate {
+            notes += &self.compare(from, to);
+        }
+
+        notes
+    }
+
+    fn compare(&self, from: String, to: String) -> String {
+        let url = format!(
+            "{}/projects/{}/repository/compare",
+            config::env_var("CI_API_V4_URL"),
+            config::env_var("CI_PROJECT_ID")
+        );
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "JOB-TOKEN",
+            config::env_var("CI_JOB_TOKEN").parse().unwrap(),
+        );
+
+        let mut query = HashMap::new();
+        query.insert("from", from.as_str());
+        query.insert("to", to.as_str());
+
+        let parsed = http_service::get(url, Some(headers), Some(query));
+        let commits = parsed
+            .get("commits")
+            .unwrap()
+            .as_array()
+            .unwrap_or(&Vec::new())
+            .iter()
+            .map(|object| {
+                format!(
+                    "* [{}]({})",
+                    object.get("message").unwrap().as_str().unwrap(),
+                    object.get("web_url").unwrap().as_str().unwrap()
+                )
+            })
+            .collect::<Vec<String>>()
+            .join("\n");
+        let full_diff = parsed.get("web_url").unwrap().as_str().unwrap_or("");
+
+        format!(
+            r#"## What's Changed
+{}
+
+Full Changelog: {}"#,
+            commits, full_diff
+        )
     }
 }

@@ -2,6 +2,7 @@ use crate::pipelines;
 use crate::semantic_version::SemanticVersion;
 use crate::{config, git_service};
 use clap::Args;
+use git2::string_array::StringArray;
 use regex::Regex;
 
 const DEV_PATTERN: &str = r"^(develop|feature/.*)$";
@@ -46,21 +47,11 @@ pub(crate) fn run(args: VersionCommandArgs) {
     } else {
         last_semantic_version.prerelease_stage = prerelease_stage.clone();
 
-        let mut last_prerelease_semantic_version = git_service::last_tag_by_pattern(
+        prerelease_version(
             &tag_names,
-            &format!(
-                r"^v?([0-9]+\.[0-9]+\.[0-9]+)-{}\.[0-9]+($|\.)",
-                prerelease_stage
-            ),
+            prerelease_stage,
             last_semantic_version,
-        );
-
-        format!(
-            "{}.{}",
-            last_prerelease_semantic_version
-                .increase_by_scope("prerelease".to_string())
-                .to_string(true),
-            &pipeline_info.short_commit_sha
+            pipeline_info.short_commit_sha,
         )
     };
 
@@ -78,5 +69,31 @@ fn prerelease_stage(branch_name: &str) -> String {
         "rc".to_string()
     } else {
         "".to_string()
+    }
+}
+
+fn prerelease_version(
+    tag_names: &StringArray,
+    prerelease_stage: String,
+    last_semantic_version: SemanticVersion,
+    short_commit_sha: String,
+) -> String {
+    let mut last_prerelease_semantic_version = git_service::last_tag_by_pattern(
+        tag_names,
+        &format!(
+            r"^v?([0-9]+\.[0-9]+\.[0-9]+)-{}\.[0-9]+($|\.)",
+            prerelease_stage
+        ),
+        last_semantic_version,
+    );
+
+    let prerelease_version = last_prerelease_semantic_version
+        .increase_by_scope("prerelease".to_string())
+        .to_string(true);
+
+    if prerelease_stage == "dev" {
+        format!("{}.{}", prerelease_version, short_commit_sha)
+    } else {
+        prerelease_version
     }
 }

@@ -14,24 +14,21 @@ pub(crate) fn tag_names(
     force_fetch_tags: bool,
     git_username: &str,
     git_token: &str,
-) -> StringArray {
-    let repo =
-        Repository::open(repo_path).unwrap_or_else(|e| panic!("Failed to open git repo: {}", e));
+) -> Result<StringArray, Error> {
+    let repo = Repository::open(repo_path)?;
 
     if force_fetch_tags {
-        fetch_refs(&repo, git_username, git_token, &["refs/tags/*:refs/tags/*"])
-            .unwrap_or_else(|e| panic!("Failed to fetch tags: {}", e));
+        fetch_refs(&repo, git_username, git_token, &["refs/tags/*:refs/tags/*"])?;
     }
 
     repo.tag_names(None)
-        .unwrap_or_else(|e| panic!("Failed to retrieve tags: {}", e))
 }
 
 pub(crate) fn last_tag_by_pattern(
-    tag_names: StringArray,
+    tag_names: &StringArray,
     tag_pattern: &str,
-    default: &str,
-) -> String {
+    default: SemanticVersion,
+) -> SemanticVersion {
     let tag_regex = Regex::new(tag_pattern).unwrap();
     let mut valid_versions: Vec<SemanticVersion> = vec![];
 
@@ -42,15 +39,15 @@ pub(crate) fn last_tag_by_pattern(
 
         match SemanticVersion::from_string(tag_name.to_string()) {
             Ok(version) => valid_versions.push(version),
-            Err(msg) => panic!("{}", msg),
+            Err(msg) => eprintln!("{}", msg),
         }
     }
 
-    valid_versions.sort_by(|a, b| b.cmp(a));
-
-    match valid_versions.first() {
-        Some(version) => version.to_string(true),
-        None => default.to_string(),
+    if valid_versions.is_empty() {
+        default
+    } else {
+        valid_versions.sort_by(|a, b| b.cmp(a));
+        valid_versions[0].clone()
     }
 }
 

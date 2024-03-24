@@ -1,10 +1,10 @@
-use crate::git_service;
 use crate::pipelines;
 use crate::semantic_version::SemanticVersion;
+use crate::{config, git_service};
 use clap::Args;
+use git2::string_array::StringArray;
 use regex::Regex;
 
-const DEFAULT_SEMANTIC_VERSION_TAG: &str = "v0.0.0";
 const DEV_PATTERN: &str = r"^(develop|feature/.*)$";
 const RELEASE_CANDIDATE_PATTERN: &str = r"^(release|hotfix)/.*$";
 const SEMANTIC_VERSION_TAG_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+)$";
@@ -16,44 +16,89 @@ pub(crate) struct VersionCommandArgs {
 }
 
 pub(crate) fn run(args: VersionCommandArgs) {
-    let pipeline_info = pipelines::pipeline_info(true);
+    // Pipeline
+    let pipeline = pipelines::current_pipeline();
+    pipeline.init();
+    let pipeline_info = pipeline.info();
 
+    // Tag names
     let tag_names = git_service::tag_names(
-        &pipeline_info.target_path,
+        &config::clone_target_path(),
         pipeline_info.force_fetch_tags,
         &pipeline_info.git_username,
         &pipeline_info.git_token,
-    );
-    let last_tag = git_service::last_tag_by_pattern(
-        tag_names,
+    )
+    .unwrap_or_else(|e| panic!("Failed to retrieve tags: {}", e));
+
+    // Upcoming version
+    let upcoming_version = git_service::last_tag_by_pattern(
+        &tag_names,
         SEMANTIC_VERSION_TAG_PATTERN,
-        DEFAULT_SEMANTIC_VERSION_TAG,
-    );
-    let version = version(args.scope, last_tag);
+        SemanticVersion {
+            major: 0,
+            minor: 0,
+            patch: 0,
+            prerelease_stage: "".to_string(),
+            prerelease_number: 0,
+        },
+    )
+    .increase_by_scope(args.scope);
 
-    let metadata = metadata(pipeline_info.branch_name, pipeline_info.short_commit_sha);
+    // Pre-release stage
+    let prerelease_stage = prerelease_stage(&pipeline_info.branch_name);
 
-    println!("{}{}", version, metadata)
+    // Version
+    let version = if prerelease_stage.is_empty() {
+        upcoming_version.to_string(true)
+    } else {
+        prerelease_version(
+            &tag_names,
+            prerelease_stage,
+            upcoming_version,
+            pipeline_info.short_commit_sha,
+        )
+    };
+
+    println!("{}", version)
 }
 
-fn version(scope: String, last_tag: String) -> String {
-    let mut semantic_version = SemanticVersion::from_string(last_tag.clone())
-        .unwrap_or_else(|e| panic!("{}: {}", e, last_tag));
-
-    semantic_version.increase_by_scope(scope).to_string(true)
-}
-
-fn metadata(branch_name: String, short_commit_sha: String) -> String {
+fn prerelease_stage(branch_name: &str) -> String {
     let dev_regex = Regex::new(DEV_PATTERN).unwrap_or_else(|e| panic!("{}", e));
     let release_candidate_regex =
         Regex::new(RELEASE_CANDIDATE_PATTERN).unwrap_or_else(|e| panic!("{}", e));
 
-    if dev_regex.is_match(&branch_name) {
-        format!("-dev.{}", short_commit_sha)
-    } else if release_candidate_regex.is_match(&branch_name) {
-        // TODO: Find "^v?(\d+\.\d+\.\d+)-rc\.\d+$" pattern tag and increase "rc\.\d+" number
-        format!("-rc.{}", short_commit_sha)
+    let stage = if dev_regex.is_match(branch_name) {
+        "dev"
+    } else if release_candidate_regex.is_match(branch_name) {
+        "rc"
     } else {
-        "".to_string()
+        ""
+    };
+
+    stage.to_string()
+}
+
+fn prerelease_version(
+    tag_names: &StringArray,
+    prerelease_stage: String,
+    mut upcoming_version: SemanticVersion,
+    short_commit_sha: String,
+) -> String {
+    upcoming_version.prerelease_stage = prerelease_stage.clone();
+    let upcoming_prerelease_version = git_service::last_tag_by_pattern(
+        tag_names,
+        &format!(
+            r"^v?([0-9]+\.[0-9]+\.[0-9]+)-{}\.[0-9]+($|\.)",
+            prerelease_stage
+        ),
+        upcoming_version,
+    )
+    .increase_by_scope("prerelease".to_string());
+
+    let upcoming_prerelease_string = upcoming_prerelease_version.to_string(true);
+    if prerelease_stage == "dev" {
+        format!("{}.{}", upcoming_prerelease_string, short_commit_sha)
+    } else {
+        upcoming_prerelease_string
     }
 }

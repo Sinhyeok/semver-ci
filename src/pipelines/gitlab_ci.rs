@@ -113,7 +113,12 @@ impl GitlabCI {
 
         let parsed = http_service::get(url, Some(headers), Some(query));
         let commits = self.collect_commits(&parsed);
-        let full_diff = parsed.get("web_url").unwrap().as_str().unwrap_or("");
+        let empty_string_value = Value::String("".to_string());
+        let full_diff = parsed
+            .get("web_url")
+            .unwrap_or(&empty_string_value)
+            .as_str()
+            .unwrap_or("");
 
         format!(
             r#"## What's Changed

@@ -8,6 +8,7 @@ use std::collections::HashMap;
 pub(crate) struct GitlabCI;
 
 pub const GITLAB_CI: &str = "GITLAB_CI";
+const IGNORE_CHANGE_PREFIXES: [&str; 4] = ["refactor:", "style:", "test:", "chore:"];
 
 impl Pipeline for GitlabCI {
     fn init(&self) {
@@ -111,21 +112,7 @@ impl GitlabCI {
         query.insert("to", to.as_str());
 
         let parsed = http_service::get(url, Some(headers), Some(query));
-        let commits = parsed
-            .get("commits")
-            .unwrap()
-            .as_array()
-            .unwrap_or(&Vec::new())
-            .iter()
-            .map(|object| {
-                format!(
-                    "* [{}]({})",
-                    object.get("message").unwrap().as_str().unwrap(),
-                    object.get("web_url").unwrap().as_str().unwrap()
-                )
-            })
-            .collect::<Vec<String>>()
-            .join("\n");
+        let commits = self.collect_commits(&parsed);
         let full_diff = parsed.get("web_url").unwrap().as_str().unwrap_or("");
 
         format!(
@@ -135,5 +122,39 @@ impl GitlabCI {
 Full Changelog: {}"#,
             commits, full_diff
         )
+    }
+
+    fn collect_commits(&self, compare_response: &HashMap<String, Value>) -> String {
+        let empty_string_value = Value::String("".to_string());
+
+        compare_response
+            .get("commits")
+            .unwrap_or(&Value::Array(vec![]))
+            .as_array()
+            .unwrap_or(&Vec::new())
+            .iter()
+            .filter_map(|object| {
+                let message = object
+                    .get("message")
+                    .unwrap_or(&empty_string_value)
+                    .as_str()
+                    .unwrap_or("");
+                let web_url = object
+                    .get("web_url")
+                    .unwrap_or(&empty_string_value)
+                    .as_str()
+                    .unwrap_or("");
+                if (message.is_empty() && web_url.is_empty())
+                    || IGNORE_CHANGE_PREFIXES
+                        .iter()
+                        .any(|&prefix| message.starts_with(prefix))
+                {
+                    None
+                } else {
+                    Some(format!("* [{}]({})", message, web_url))
+                }
+            })
+            .collect::<Vec<String>>()
+            .join("\n")
     }
 }

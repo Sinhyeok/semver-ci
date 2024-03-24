@@ -45,8 +45,6 @@ pub(crate) fn run(args: VersionCommandArgs) {
     let version = if prerelease_stage.is_empty() {
         upcoming_version.to_string(true)
     } else {
-        upcoming_version.prerelease_stage = prerelease_stage.clone();
-
         prerelease_version(
             &tag_names,
             prerelease_stage,
@@ -80,6 +78,7 @@ fn prerelease_version(
     last_semantic_version: SemanticVersion,
     short_commit_sha: String,
 ) -> String {
+    upcoming_version.prerelease_stage = prerelease_stage.clone();
     let upcoming_prerelease_version = git_service::last_tag_by_pattern(
         tag_names,
         &format!(

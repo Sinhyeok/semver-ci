@@ -8,7 +8,7 @@ use std::collections::HashMap;
 pub(crate) struct GitlabCI;
 
 pub const GITLAB_CI: &str = "GITLAB_CI";
-const IGNORE_CHANGE_PREFIXES: [&str; 4] = ["refactor:", "style:", "test:", "chore:"];
+const IGNORE_CHANGE_PREFIXES: [&str; 5] = ["refactor:", "style:", "test:", "chore:", "Merge "];
 
 impl Pipeline for GitlabCI {
     fn init(&self) {

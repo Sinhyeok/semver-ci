@@ -55,8 +55,8 @@ impl Pipeline for GitlabCI {
         let description = self.release_notes(
             release.description.clone(),
             release.generate_release_notes,
-            release.previous_tag.clone(),
-            config::env_var("CI_COMMIT_SHA"),
+            &release.previous_tag,
+            &config::env_var("CI_COMMIT_SHA"),
         );
 
         let mut body = HashMap::new();
@@ -78,13 +78,7 @@ impl GitlabCI {
             .unwrap_or_else(|e| panic!("{}", e));
     }
 
-    fn release_notes(
-        &self,
-        prepend: String,
-        auto_generate: bool,
-        from: String,
-        to: String,
-    ) -> String {
+    fn release_notes(&self, prepend: String, auto_generate: bool, from: &str, to: &str) -> String {
         let mut notes = prepend.clone();
 
         if auto_generate {
@@ -94,7 +88,7 @@ impl GitlabCI {
         notes
     }
 
-    fn compare(&self, from: String, to: String) -> String {
+    fn compare(&self, from: &str, to: &str) -> String {
         let url = format!(
             "{}/projects/{}/repository/compare",
             config::env_var("CI_API_V4_URL"),
@@ -108,8 +102,8 @@ impl GitlabCI {
         );
 
         let mut query = HashMap::new();
-        query.insert("from", from.as_str());
-        query.insert("to", to.as_str());
+        query.insert("from", from);
+        query.insert("to", to);
 
         let parsed = http_service::get(url, Some(headers), Some(query));
         let commits = self.collect_commits(&parsed);

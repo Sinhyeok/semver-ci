@@ -16,10 +16,12 @@ pub(crate) struct VersionCommandArgs {
 }
 
 pub(crate) fn run(args: VersionCommandArgs) {
+    // Pipeline
     let pipeline = pipelines::current_pipeline();
     pipeline.init();
     let pipeline_info = pipeline.info();
 
+    // Tag names
     let tag_names = git_service::tag_names(
         &config::clone_target_path(),
         pipeline_info.force_fetch_tags,
@@ -28,7 +30,8 @@ pub(crate) fn run(args: VersionCommandArgs) {
     )
     .unwrap_or_else(|e| panic!("Failed to retrieve tags: {}", e));
 
-    let mut upcoming_version = git_service::last_tag_by_pattern(
+    // Upcoming version
+    let upcoming_version = git_service::last_tag_by_pattern(
         &tag_names,
         SEMANTIC_VERSION_TAG_PATTERN,
         SemanticVersion {
@@ -41,7 +44,10 @@ pub(crate) fn run(args: VersionCommandArgs) {
     )
     .increase_by_scope(args.scope);
 
+    // Pre-release stage
     let prerelease_stage = prerelease_stage(&pipeline_info.branch_name);
+
+    // Version
     let version = if prerelease_stage.is_empty() {
         upcoming_version.to_string(true)
     } else {
@@ -75,7 +81,7 @@ fn prerelease_stage(branch_name: &str) -> String {
 fn prerelease_version(
     tag_names: &StringArray,
     prerelease_stage: String,
-    last_semantic_version: SemanticVersion,
+    mut upcoming_version: SemanticVersion,
     short_commit_sha: String,
 ) -> String {
     upcoming_version.prerelease_stage = prerelease_stage.clone();
@@ -85,15 +91,14 @@ fn prerelease_version(
             r"^v?([0-9]+\.[0-9]+\.[0-9]+)-{}\.[0-9]+($|\.)",
             prerelease_stage
         ),
-        last_semantic_version,
+        upcoming_version,
     )
     .increase_by_scope("prerelease".to_string());
 
-    let prerelease_version = upcoming_prerelease_version.to_string(true);
-
+    let upcoming_prerelease_string = upcoming_prerelease_version.to_string(true);
     if prerelease_stage == "dev" {
-        format!("{}.{}", prerelease_version, short_commit_sha)
+        format!("{}.{}", upcoming_prerelease_string, short_commit_sha)
     } else {
-        prerelease_version
+        upcoming_prerelease_string
     }
 }

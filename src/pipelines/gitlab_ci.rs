@@ -20,7 +20,7 @@ impl Pipeline for GitlabCI {
     }
 
     fn branch_name(&self) -> String {
-        config::env_var("CI_COMMIT_BRANCH")
+        config::env_var("CI_COMMIT_REF_NAME")
     }
 
     fn short_commit_sha(&self) -> String {

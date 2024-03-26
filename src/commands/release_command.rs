@@ -1,6 +1,7 @@
 use crate::pipelines;
 use crate::release::Release;
 use clap::Args;
+use std::error::Error;
 
 #[derive(Args)]
 pub(crate) struct ReleaseCommandArgs {
@@ -33,7 +34,7 @@ pub(crate) struct ReleaseCommandArgs {
     strip_prefix_v: bool,
 }
 
-pub(crate) fn run(args: ReleaseCommandArgs) {
+pub(crate) fn run(args: ReleaseCommandArgs) -> Result<(), Box<dyn Error>> {
     let tag_name = args.tag_name.unwrap_or(args.name.clone());
     let release = Release {
         name: args.name,
@@ -48,4 +49,6 @@ pub(crate) fn run(args: ReleaseCommandArgs) {
     let parsed = pipeline.create_release(&release);
 
     println!("{:#?}", parsed);
+
+    Ok(())
 }

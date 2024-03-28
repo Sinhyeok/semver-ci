@@ -1,6 +1,8 @@
+use crate::default_error::DefaultError;
 use crate::pipelines;
 use clap::Args;
 use regex::Regex;
+use std::error::Error;
 
 #[derive(Args)]
 pub(crate) struct ScopeCommandArgs {
@@ -16,10 +18,10 @@ pub(crate) struct ScopeCommandArgs {
     patch: String,
 }
 
-pub(crate) fn run(args: ScopeCommandArgs) {
-    let major_regex = Regex::new(&args.major).unwrap_or_else(|e| panic!("{}", e));
-    let minor_regex = Regex::new(&args.minor).unwrap_or_else(|e| panic!("{}", e));
-    let patch_regex = Regex::new(&args.patch).unwrap_or_else(|e| panic!("{}", e));
+pub(crate) fn run(args: ScopeCommandArgs) -> Result<(), Box<dyn Error>> {
+    let major_regex = Regex::new(&args.major)?;
+    let minor_regex = Regex::new(&args.minor)?;
+    let patch_regex = Regex::new(&args.patch)?;
 
     let pipeline = pipelines::current_pipeline();
     let branch_name = &pipeline.branch_name();
@@ -31,6 +33,11 @@ pub(crate) fn run(args: ScopeCommandArgs) {
     } else if patch_regex.is_match(branch_name) {
         println!("patch")
     } else {
-        panic!("Unknown branch name: {}", branch_name)
+        return Err(Box::new(DefaultError {
+            message: format!("Unknown branch name: {}", branch_name),
+            source: None,
+        }));
     }
+
+    Ok(())
 }

@@ -1,9 +1,11 @@
+use crate::default_error::DefaultError;
 use crate::pipelines;
 use crate::semantic_version::SemanticVersion;
 use crate::{config, git_service};
 use clap::Args;
 use git2::string_array::StringArray;
 use regex::Regex;
+use std::error::Error;
 
 const DEV_PATTERN: &str = r"^(develop|feature/.*)$";
 const RELEASE_CANDIDATE_PATTERN: &str = r"^(release|hotfix)/.*$";
@@ -15,7 +17,7 @@ pub(crate) struct VersionCommandArgs {
     scope: String,
 }
 
-pub(crate) fn run(args: VersionCommandArgs) {
+pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
     // Pipeline
     let pipeline = pipelines::current_pipeline();
     pipeline.init();
@@ -28,7 +30,12 @@ pub(crate) fn run(args: VersionCommandArgs) {
         &pipeline_info.git_username,
         &pipeline_info.git_token,
     )
-    .unwrap_or_else(|e| panic!("Failed to retrieve tags: {}", e));
+    .map_err(|e| {
+        Box::new(DefaultError {
+            message: "Failed to retrieve tags".to_string(),
+            source: Some(Box::new(e)),
+        })
+    })?;
 
     // Upcoming version
     let upcoming_version = git_service::last_tag_by_pattern(
@@ -59,7 +66,9 @@ pub(crate) fn run(args: VersionCommandArgs) {
         )
     };
 
-    println!("{}", version)
+    println!("{}", version);
+
+    Ok(())
 }
 
 fn prerelease_stage(branch_name: &str) -> String {

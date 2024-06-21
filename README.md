@@ -53,7 +53,7 @@ jobs:
           #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
         run: |
           export SCOPE=$(svci scope)
-          echo "UPCOMING_VERSION=$(svci version)" >> "$GITHUB_OUTPUT"
+          svci version >> "$GITHUB_OUTPUT"
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -73,7 +73,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - run: svci release "$RELEASE_NAME"
+      - run: svci release -g "$RELEASE_NAME"
     env:
       RELEASE_NAME: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -100,7 +100,7 @@ upcoming_version:
       #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
     - |
       export SCOPE=$(svci scope)
-      echo "UPCOMING_VERSION=$(svci version)" >> version.env
+      svci version >> version.env
   artifacts:
     reports:
       dotenv: version.env
@@ -121,10 +121,8 @@ release_candidate:
   image:
     name: tartar4s/semver-ci
     entrypoint: [""]
-  variables:
-    RELEASE_NAME: $UPCOMING_VERSION
   script:
-    - svci release $RELEASE_NAME
+    - svci release -g -p $LAST_VERSION $UPCOMING_VERSION
   rules:
     - if: $CI_COMMIT_BRANCH =~ /^(release\/.+|hotfix\/.+)$/
 ```
@@ -156,6 +154,12 @@ Options:
   -h, --help           Print help
   -V, --version        Print version
 ```
+#### Example
+```shell
+% svci verion
+UPCOMING_VERSION=v0.8.0-dev.1.c8ae805d
+LAST_VERSION=v0.7.1
+```
 ### scope
 Print scope based on branch name
 ```shell
@@ -168,6 +172,11 @@ Options:
   -h, --help           Print help
   -V, --version        Print version
 ```
+#### Example
+```shell
+% svci scope
+minor
+```
 ### release
 Create a release in Github or GitLab
 ```shell
@@ -177,13 +186,14 @@ Arguments:
   <NAME>  Release name
 
 Options:
-      --description <DESCRIPTION>  Release description [env: DESCRIPTION=] [default: ]
-      --tag-name <TAG_NAME>        [env: TAG_NAME=]
-      --tag-message <TAG_MESSAGE>  Specify tag_message to create an annotated tag [env: TAG_MESSAGE=] [default: ]
-  -g, --generate-release-notes     (Only for Github Actions) Automatically generate the body for this release. If body is specified, the body will be pre-pended to the automatically generated notes [env: GENERATE_RELEASE_NOTES=]
-  -s, --strip-prefix-v             Strip prefix "v" from release name and tag name. ex) v0.1.0 => 0.1.0 [env: STRIP_PREFIX_V=]
-  -h, --help                       Print help
-  -V, --version                    Print version
+      --description <DESCRIPTION>    Release description [env: DESCRIPTION=] [default: ]
+      --tag-name <TAG_NAME>          [env: TAG_NAME=]
+      --tag-message <TAG_MESSAGE>    Specify tag_message to create an annotated tag [env: TAG_MESSAGE=] [default: ]
+  -g, --generate-release-notes       Automatically generate the body for this release. If description is specified, the description will be pre-pended to the automatically generated notes [env: GENERATE_RELEASE_NOTES=]
+  -p, --previous-tag <PREVIOUS_TAG>  (Only for GitLab CI) tag from previous releases to compare when automatically generating release notes [env: PREVIOUS_TAG=] [default: ]
+  -s, --strip-prefix-v               Strip prefix "v" from release name and tag name. ex) v0.1.0 => 0.1.0 [env: STRIP_PREFIX_V=]
+  -h, --help                         Print help
+  -V, --version                      Print version
 ```
 ### tag
 Create and push git tag to origin

@@ -37,8 +37,8 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
         })
     })?;
 
-    // Upcoming version
-    let upcoming_version = git_service::last_tag_by_pattern(
+    // Last tag
+    let mut last_tag = git_service::last_tag_by_pattern(
         &tag_names,
         SEMANTIC_VERSION_TAG_PATTERN,
         SemanticVersion {
@@ -48,8 +48,10 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
             prerelease_stage: "".to_string(),
             prerelease_number: 0,
         },
-    )
-    .increase_by_scope(args.scope);
+    );
+
+    // Upcoming version
+    let upcoming_version = last_tag.increase_by_scope(args.scope);
 
     // Pre-release stage
     let prerelease_stage = prerelease_stage(&pipeline_info.branch_name);
@@ -66,7 +68,8 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
         )
     };
 
-    println!("{}", version);
+    println!("UPCOMING_VERSION={}", version);
+    println!("LAST_VERSION={}", last_tag.to_string(true));
 
     Ok(())
 }

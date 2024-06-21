@@ -96,7 +96,7 @@ fn prerelease_version(
     mut upcoming_version: SemanticVersion,
     short_commit_sha: String,
 ) -> String {
-    upcoming_version.prerelease_stage = prerelease_stage.clone();
+    upcoming_version.prerelease_stage.clone_from(&prerelease_stage);
     let upcoming_prerelease_version = git_service::last_tag_by_pattern(
         tag_names,
         &format!(

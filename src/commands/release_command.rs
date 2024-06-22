@@ -1,6 +1,7 @@
 use crate::pipelines;
 use crate::release::Release;
 use clap::Args;
+use std::error::Error;
 
 #[derive(Args)]
 pub(crate) struct ReleaseCommandArgs {
@@ -24,7 +25,7 @@ pub(crate) struct ReleaseCommandArgs {
     generate_release_notes: bool,
 
     /// (Only for GitLab CI) tag from previous releases to compare when automatically generating release notes
-    #[arg(long, env, default_value = "")]
+    #[arg(short, long, env, default_value = "")]
     previous_tag: String,
 
     /// Strip prefix "v" from release name and tag name.
@@ -33,7 +34,7 @@ pub(crate) struct ReleaseCommandArgs {
     strip_prefix_v: bool,
 }
 
-pub(crate) fn run(args: ReleaseCommandArgs) {
+pub(crate) fn run(args: ReleaseCommandArgs) -> Result<(), Box<dyn Error>> {
     let tag_name = args.tag_name.unwrap_or(args.name.clone());
     let release = Release {
         name: args.name,
@@ -48,4 +49,6 @@ pub(crate) fn run(args: ReleaseCommandArgs) {
     let parsed = pipeline.create_release(&release);
 
     println!("{:#?}", parsed);
+
+    Ok(())
 }

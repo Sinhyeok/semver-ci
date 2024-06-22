@@ -39,6 +39,8 @@ on:
       - 'feature/*'
       - 'release/*'
       - 'hotfix/*'
+      - 'main'
+      - 'master'
 
 jobs:
   upcoming_version:

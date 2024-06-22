@@ -114,8 +114,8 @@ fn prerelease_version(
             prerelease_stage
         ),
         upcoming_version,
-    );
-    upcoming_prerelease_version.increase_by_scope("prerelease".to_string());
+    )
+    .increase_by_scope("prerelease".to_string());
     upcoming_prerelease_version.commit_short_sha = commit_short_sha;
 
     upcoming_prerelease_version.to_string(true)

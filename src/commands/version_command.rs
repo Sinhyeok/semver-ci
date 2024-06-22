@@ -42,13 +42,7 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
     let mut last_official_tag = git_service::last_tag_by_pattern(
         &tag_names,
         SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN,
-        SemanticVersion {
-            major: 0,
-            minor: 0,
-            patch: 0,
-            prerelease_stage: "".to_string(),
-            prerelease_number: 0,
-        },
+        SemanticVersion::default(),
     );
 
     // Upcoming official version
@@ -76,13 +70,7 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
         git_service::last_tag_by_pattern(
             &tag_names,
             SEMANTIC_VERSION_TAG_ALL_PATTERN,
-            SemanticVersion {
-                major: 0,
-                minor: 0,
-                patch: 0,
-                prerelease_stage: "".to_string(),
-                prerelease_number: 0,
-            },
+            SemanticVersion::default(),
         )
         .to_string(true)
     };
@@ -113,25 +101,22 @@ fn prerelease_version(
     tag_names: &StringArray,
     prerelease_stage: String,
     mut upcoming_version: SemanticVersion,
-    short_commit_sha: String,
+    commit_short_sha: String,
 ) -> String {
     upcoming_version
         .prerelease_stage
         .clone_from(&prerelease_stage);
-    let upcoming_prerelease_version = git_service::last_tag_by_pattern(
+
+    let mut upcoming_prerelease_version = git_service::last_tag_by_pattern(
         tag_names,
         &format!(
             r"^v?([0-9]+\.[0-9]+\.[0-9]+)-{}\.[0-9]+($|\.)",
             prerelease_stage
         ),
         upcoming_version,
-    )
-    .increase_by_scope("prerelease".to_string());
+    );
+    upcoming_prerelease_version.increase_by_scope("prerelease".to_string());
+    upcoming_prerelease_version.commit_short_sha = commit_short_sha;
 
-    let upcoming_prerelease_string = upcoming_prerelease_version.to_string(true);
-    if prerelease_stage == "dev" {
-        format!("{}.{}", upcoming_prerelease_string, short_commit_sha)
-    } else {
-        upcoming_prerelease_string
-    }
+    upcoming_prerelease_version.to_string(true)
 }

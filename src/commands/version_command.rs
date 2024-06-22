@@ -44,36 +44,30 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
         SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN,
         SemanticVersion::default(),
     );
+    let mut last_tag = git_service::last_tag_by_pattern(
+        &tag_names,
+        SEMANTIC_VERSION_TAG_ALL_PATTERN,
+        SemanticVersion::default(),
+    );
 
-    // Upcoming official version
-    let upcoming_official_version = last_official_tag.increase_by_scope(args.scope);
+    let upcoming_version;
+    let last_version;
 
-    // Pre-release stage
     let prerelease_stage = prerelease_stage(&pipeline_info.branch_name);
-
-    // Upcoming version
-    let upcoming_version = if prerelease_stage.is_empty() {
-        upcoming_official_version.to_string(true)
+    if args.scope == "release" || prerelease_stage.is_empty() {
+        upcoming_version = last_tag.release().to_string(true);
+        last_version = last_official_tag.to_string(true);
     } else {
-        prerelease_version(
+        let upcoming_official_version = last_official_tag.increase_by_scope(args.scope);
+        upcoming_version = prerelease_version(
             &tag_names,
             prerelease_stage.clone(),
             upcoming_official_version,
             pipeline_info.short_commit_sha,
-        )
-    };
+        );
 
-    // Last version
-    let last_version = if prerelease_stage.is_empty() {
-        last_official_tag.to_string(true)
-    } else {
-        git_service::last_tag_by_pattern(
-            &tag_names,
-            SEMANTIC_VERSION_TAG_ALL_PATTERN,
-            SemanticVersion::default(),
-        )
-        .to_string(true)
-    };
+        last_version = last_tag.to_string(true);
+    }
 
     println!("UPCOMING_VERSION={}", upcoming_version);
     println!("LAST_VERSION={}", last_version);
@@ -100,9 +94,11 @@ fn prerelease_stage(branch_name: &str) -> String {
 fn prerelease_version(
     tag_names: &StringArray,
     prerelease_stage: String,
-    mut upcoming_version: SemanticVersion,
+    upcoming_official_version: SemanticVersion,
     commit_short_sha: String,
 ) -> String {
+    let upcoming_official_version_string = upcoming_official_version.to_string(false);
+    let mut upcoming_version = upcoming_official_version.clone();
     upcoming_version
         .prerelease_stage
         .clone_from(&prerelease_stage);
@@ -110,8 +106,8 @@ fn prerelease_version(
     let mut upcoming_prerelease_version = git_service::last_tag_by_pattern(
         tag_names,
         &format!(
-            r"^v?([0-9]+\.[0-9]+\.[0-9]+)-{}\.[0-9]+($|\.)",
-            prerelease_stage
+            r"^v?{}-{}\.[0-9]+.*$",
+            upcoming_official_version_string, prerelease_stage
         ),
         upcoming_version,
     )

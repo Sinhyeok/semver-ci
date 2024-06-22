@@ -1,5 +1,4 @@
 use std::cmp::Ordering;
-use std::ops::Not;
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct SemanticVersion {
@@ -76,6 +75,16 @@ impl SemanticVersion {
         increased
     }
 
+    pub fn release(&mut self) -> SemanticVersion {
+        let mut release_version = self.clone();
+
+        release_version.prerelease_stage = "".to_string();
+        release_version.prerelease_number = 0;
+        release_version.commit_short_sha = "".to_string();
+
+        release_version
+    }
+
     pub fn from_string(version_string: String) -> Result<Self, String> {
         let prefix_stripped = match version_string.strip_prefix('v') {
             Some(stripped) => stripped.to_string(),
@@ -113,29 +122,21 @@ impl SemanticVersion {
     }
 
     pub fn to_string(&self, prefix_v: bool) -> String {
-        let version_string = if self.is_prerelease() {
-            if self.commit_short_sha.is_empty() {
-                format!(
-                    "{}.{}.{}-{}.{}",
-                    self.major,
-                    self.minor,
-                    self.patch,
-                    self.prerelease_stage,
-                    self.prerelease_number
-                )
-            } else {
-                format!(
-                    "{}.{}.{}-{}.{}.{}",
-                    self.major,
-                    self.minor,
-                    self.patch,
-                    self.prerelease_stage,
-                    self.prerelease_number,
-                    self.commit_short_sha
-                )
-            }
-        } else {
-            format!("{}.{}.{}", self.major, self.minor, self.patch)
+        let version_string = match self.prerelease_stage.as_str() {
+            "dev" => format!(
+                "{}.{}.{}-{}.{}.{}",
+                self.major,
+                self.minor,
+                self.patch,
+                self.prerelease_stage,
+                self.prerelease_number,
+                self.commit_short_sha
+            ),
+            "rc" => format!(
+                "{}.{}.{}-{}.{}",
+                self.major, self.minor, self.patch, self.prerelease_stage, self.prerelease_number
+            ),
+            _ => format!("{}.{}.{}", self.major, self.minor, self.patch),
         };
 
         if prefix_v {
@@ -143,10 +144,6 @@ impl SemanticVersion {
         } else {
             version_string
         }
-    }
-
-    fn is_prerelease(&self) -> bool {
-        self.prerelease_stage.is_empty().not()
     }
 
     pub fn default() -> Self {

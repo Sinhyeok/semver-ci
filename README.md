@@ -62,27 +62,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: upcoming_version
     steps:
-      - run: echo "$RELEASE_TAG"
+      - run: echo "build $RELEASE_TAG"
     env:
       RELEASE_TAG: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
 
-  release_candidate:
-    runs-on: ubuntu-latest
-    container: tartar4s/semver-ci
-    if: startsWith(github.ref_name, 'release/') || startsWith(github.ref_name, 'hotfix/')
-    needs: [upcoming_version, build]
-    permissions:
-      contents: write
-    steps:
-      - run: svci release -g "$RELEASE_NAME"
-    env:
-      RELEASE_NAME: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  
   release:
     runs-on: ubuntu-latest
     container: tartar4s/semver-ci
-    if: github.ref_name == 'main' || github.ref_name == 'master'
+    if: github.ref_name == 'main' || github.ref_name == 'master' || startsWith(github.ref_name, 'release/') || startsWith(github.ref_name, 'hotfix/')
     needs: [upcoming_version, build]
     permissions:
       contents: write
@@ -126,22 +113,10 @@ upcoming_version:
 
 build:
   stage: build
-  variables:
-    RELEASE_TAG: $UPCOMING_VERSION
   script:
-    - echo "$RELEASE_TAG"
+    - echo "build $UPCOMING_VERSION"
   rules:
     - if: $CI_COMMIT_BRANCH
-
-release_candidate:
-  stage: release
-  image:
-    name: tartar4s/semver-ci
-    entrypoint: [""]
-  script:
-    - svci release -g -p $LAST_VERSION $UPCOMING_VERSION
-  rules:
-    - if: $CI_COMMIT_BRANCH =~ /^(release\/.+|hotfix\/.+)$/
 
 release:
   stage: release
@@ -151,7 +126,7 @@ release:
   script:
     - svci release -g -p $LAST_VERSION $UPCOMING_VERSION
   rules:
-    - if: $CI_COMMIT_BRANCH =~ /^(main|master)$/
+    - if: $CI_COMMIT_BRANCH =~ /^(main|master|release\/.+|hotfix\/.+)$/
 ```
 ### Git Repo
 > [!NOTE]

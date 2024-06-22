@@ -94,9 +94,11 @@ fn prerelease_stage(branch_name: &str) -> String {
 fn prerelease_version(
     tag_names: &StringArray,
     prerelease_stage: String,
-    mut upcoming_version: SemanticVersion,
+    upcoming_official_version: SemanticVersion,
     commit_short_sha: String,
 ) -> String {
+    let upcoming_official_version_string = upcoming_official_version.to_string(false);
+    let mut upcoming_version = upcoming_official_version.clone();
     upcoming_version
         .prerelease_stage
         .clone_from(&prerelease_stage);
@@ -105,13 +107,14 @@ fn prerelease_version(
         tag_names,
         &format!(
             r"^v?{}-{}\.[0-9]+($|\.)",
-            upcoming_version.to_string(false),
-            prerelease_stage
+            upcoming_official_version_string, prerelease_stage
         ),
         upcoming_version,
     )
     .increase_by_scope("prerelease".to_string());
-    upcoming_prerelease_version.commit_short_sha = commit_short_sha;
+    if prerelease_stage == "dev" {
+        upcoming_prerelease_version.commit_short_sha = commit_short_sha;
+    }
 
     upcoming_prerelease_version.to_string(true)
 }

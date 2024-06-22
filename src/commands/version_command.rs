@@ -44,36 +44,30 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
         SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN,
         SemanticVersion::default(),
     );
+    let mut last_tag = git_service::last_tag_by_pattern(
+        &tag_names,
+        SEMANTIC_VERSION_TAG_ALL_PATTERN,
+        SemanticVersion::default(),
+    );
 
-    // Upcoming official version
-    let upcoming_official_version = last_official_tag.increase_by_scope(args.scope);
+    let upcoming_version;
+    let last_version;
 
-    // Pre-release stage
     let prerelease_stage = prerelease_stage(&pipeline_info.branch_name);
-
-    // Upcoming version
-    let upcoming_version = if prerelease_stage.is_empty() {
-        upcoming_official_version.to_string(true)
+    if args.scope == "release" || prerelease_stage.is_empty() {
+        upcoming_version = last_tag.release().to_string(true);
+        last_version = last_official_tag.to_string(true);
     } else {
-        prerelease_version(
+        let upcoming_official_version = last_official_tag.increase_by_scope(args.scope);
+        upcoming_version = prerelease_version(
             &tag_names,
             prerelease_stage.clone(),
             upcoming_official_version,
             pipeline_info.short_commit_sha,
-        )
-    };
+        );
 
-    // Last version
-    let last_version = if prerelease_stage.is_empty() {
-        last_official_tag.to_string(true)
-    } else {
-        git_service::last_tag_by_pattern(
-            &tag_names,
-            SEMANTIC_VERSION_TAG_ALL_PATTERN,
-            SemanticVersion::default(),
-        )
-        .to_string(true)
-    };
+        last_version = last_tag.to_string(true);
+    }
 
     println!("UPCOMING_VERSION={}", upcoming_version);
     println!("LAST_VERSION={}", last_version);

@@ -9,7 +9,8 @@ use std::error::Error;
 
 const DEV_PATTERN: &str = r"^(develop|feature/.*)$";
 const RELEASE_CANDIDATE_PATTERN: &str = r"^(release|hotfix)/.*$";
-const SEMANTIC_VERSION_TAG_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+)$";
+const SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+)$";
+const SEMANTIC_VERSION_TAG_ALL_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+.*)$";
 
 #[derive(Args)]
 pub(crate) struct VersionCommandArgs {
@@ -37,36 +38,45 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
         })
     })?;
 
-    // Upcoming version
-    let upcoming_version = git_service::last_tag_by_pattern(
+    // Last official tag
+    let mut last_official_tag = git_service::last_tag_by_pattern(
         &tag_names,
-        SEMANTIC_VERSION_TAG_PATTERN,
-        SemanticVersion {
-            major: 0,
-            minor: 0,
-            patch: 0,
-            prerelease_stage: "".to_string(),
-            prerelease_number: 0,
-        },
-    )
-    .increase_by_scope(args.scope);
+        SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN,
+        SemanticVersion::default(),
+    );
+
+    // Upcoming official version
+    let upcoming_official_version = last_official_tag.increase_by_scope(args.scope);
 
     // Pre-release stage
     let prerelease_stage = prerelease_stage(&pipeline_info.branch_name);
 
-    // Version
-    let version = if prerelease_stage.is_empty() {
-        upcoming_version.to_string(true)
+    // Upcoming version
+    let upcoming_version = if prerelease_stage.is_empty() {
+        upcoming_official_version.to_string(true)
     } else {
         prerelease_version(
             &tag_names,
-            prerelease_stage,
-            upcoming_version,
+            prerelease_stage.clone(),
+            upcoming_official_version,
             pipeline_info.short_commit_sha,
         )
     };
 
-    println!("{}", version);
+    // Last version
+    let last_version = if prerelease_stage.is_empty() {
+        last_official_tag.to_string(true)
+    } else {
+        git_service::last_tag_by_pattern(
+            &tag_names,
+            SEMANTIC_VERSION_TAG_ALL_PATTERN,
+            SemanticVersion::default(),
+        )
+        .to_string(true)
+    };
+
+    println!("UPCOMING_VERSION={}", upcoming_version);
+    println!("LAST_VERSION={}", last_version);
 
     Ok(())
 }
@@ -91,10 +101,13 @@ fn prerelease_version(
     tag_names: &StringArray,
     prerelease_stage: String,
     mut upcoming_version: SemanticVersion,
-    short_commit_sha: String,
+    commit_short_sha: String,
 ) -> String {
-    upcoming_version.prerelease_stage = prerelease_stage.clone();
-    let upcoming_prerelease_version = git_service::last_tag_by_pattern(
+    upcoming_version
+        .prerelease_stage
+        .clone_from(&prerelease_stage);
+
+    let mut upcoming_prerelease_version = git_service::last_tag_by_pattern(
         tag_names,
         &format!(
             r"^v?([0-9]+\.[0-9]+\.[0-9]+)-{}\.[0-9]+($|\.)",
@@ -103,11 +116,7 @@ fn prerelease_version(
         upcoming_version,
     )
     .increase_by_scope("prerelease".to_string());
+    upcoming_prerelease_version.commit_short_sha = commit_short_sha;
 
-    let upcoming_prerelease_string = upcoming_prerelease_version.to_string(true);
-    if prerelease_stage == "dev" {
-        format!("{}.{}", upcoming_prerelease_string, short_commit_sha)
-    } else {
-        upcoming_prerelease_string
-    }
+    upcoming_prerelease_version.to_string(true)
 }

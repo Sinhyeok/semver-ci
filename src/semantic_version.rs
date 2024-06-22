@@ -8,6 +8,7 @@ pub struct SemanticVersion {
     pub patch: u64,
     pub prerelease_stage: String,
     pub prerelease_number: u64,
+    pub commit_short_sha: String,
 }
 
 impl PartialOrd for SemanticVersion {
@@ -34,6 +35,7 @@ impl Clone for SemanticVersion {
             patch: self.patch,
             prerelease_stage: self.prerelease_stage.clone(),
             prerelease_number: self.prerelease_number,
+            commit_short_sha: self.commit_short_sha.clone(),
         }
     }
 }
@@ -93,11 +95,12 @@ impl SemanticVersion {
         let patch = version_part(version_parts[2], "patch")?;
 
         // metadata
-        let (prerelease_stage, prerelease_number) = if version_n_metadata.len() < 2 {
-            ("".to_string(), 0)
-        } else {
-            metadata(version_n_metadata[1])?
-        };
+        let (prerelease_stage, prerelease_number, commit_short_sha) =
+            if version_n_metadata.len() < 2 {
+                ("".to_string(), 0, "".to_string())
+            } else {
+                metadata(version_n_metadata[1])?
+            };
 
         Ok(SemanticVersion {
             major,
@@ -105,15 +108,32 @@ impl SemanticVersion {
             patch,
             prerelease_stage,
             prerelease_number,
+            commit_short_sha,
         })
     }
 
     pub fn to_string(&self, prefix_v: bool) -> String {
         let version_string = if self.is_prerelease() {
-            format!(
-                "{}.{}.{}-{}.{}",
-                self.major, self.minor, self.patch, self.prerelease_stage, self.prerelease_number
-            )
+            if self.commit_short_sha.is_empty() {
+                format!(
+                    "{}.{}.{}-{}.{}",
+                    self.major,
+                    self.minor,
+                    self.patch,
+                    self.prerelease_stage,
+                    self.prerelease_number
+                )
+            } else {
+                format!(
+                    "{}.{}.{}-{}.{}.{}",
+                    self.major,
+                    self.minor,
+                    self.patch,
+                    self.prerelease_stage,
+                    self.prerelease_number,
+                    self.commit_short_sha
+                )
+            }
         } else {
             format!("{}.{}.{}", self.major, self.minor, self.patch)
         };
@@ -128,6 +148,17 @@ impl SemanticVersion {
     fn is_prerelease(&self) -> bool {
         self.prerelease_stage.is_empty().not()
     }
+
+    pub fn default() -> Self {
+        SemanticVersion {
+            major: 0,
+            minor: 0,
+            patch: 0,
+            prerelease_stage: "".to_string(),
+            prerelease_number: 0,
+            commit_short_sha: "".to_string(),
+        }
+    }
 }
 
 fn version_part(part: &str, scope: &str) -> Result<u64, String> {
@@ -135,16 +166,20 @@ fn version_part(part: &str, scope: &str) -> Result<u64, String> {
         .map_err(|e| format!("Invalid {} version: {}\n{}", scope, part, e))
 }
 
-fn metadata(metadata_string: &str) -> Result<(String, u64), String> {
+fn metadata(metadata_string: &str) -> Result<(String, u64, String), String> {
     let metadata_parts: Vec<&str> = metadata_string.split('.').collect();
     if metadata_parts.len() < 2 {
         return Err(format!("Invalid metadata format: {}", metadata_string));
     }
 
     let prerelease_stage = metadata_parts[0].to_string();
-    let prerelease_number = metadata_parts[1]
-        .parse::<u64>()
-        .map_err(|e| format!("Invalid prerelease number: {}\n{}", metadata_parts[1], e))?;
+    let prerelease_number = metadata_parts[1].parse::<u64>().map_err(|_| {
+        format!(
+            "Invalid prerelease number: {}, Metadata: {}",
+            metadata_parts[1], metadata_string
+        )
+    })?;
+    let short_commit_sha = metadata_parts.get(2).unwrap_or(&"").to_string();
 
-    Ok((prerelease_stage, prerelease_number))
+    Ok((prerelease_stage, prerelease_number, short_commit_sha))
 }

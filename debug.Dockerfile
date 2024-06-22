@@ -1,4 +1,4 @@
-FROM rust:1.75.0-bookworm AS build
+FROM rust:1.79.0-bookworm AS build
 
 # apt
 RUN apt update && apt install -y musl-dev musl-tools build-essential cmake

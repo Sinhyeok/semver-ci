@@ -25,7 +25,7 @@ pub(crate) struct ReleaseCommandArgs {
     generate_release_notes: bool,
 
     /// (Only for GitLab CI) tag from previous releases to compare when automatically generating release notes
-    #[arg(long, env, default_value = "")]
+    #[arg(short, long, env, default_value = "")]
     previous_tag: String,
 
     /// Strip prefix "v" from release name and tag name.

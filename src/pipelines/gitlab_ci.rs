@@ -82,10 +82,24 @@ impl GitlabCI {
         let mut notes = prepend.clone();
 
         if auto_generate {
-            notes += &self.compare(from, to);
+            if from == "v0.0.0" {
+                notes += &self.commits(to);
+            } else {
+                notes += &self.compare(from, to);
+            }
         }
 
         notes
+    }
+
+    fn commits(&self, ref_name: &str) -> String {
+        let commits = format!(
+            "{}/-/commits/{}",
+            config::env_var("CI_PROJECT_URL"),
+            ref_name
+        );
+
+        format!(r#"Full Changelog: {}"#, commits)
     }
 
     fn compare(&self, from: &str, to: &str) -> String {

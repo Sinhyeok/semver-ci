@@ -51,6 +51,7 @@ jobs:
           #export MAJOR='^release/[0-9]+.x.x$'
           #export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
           #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
+          #export RELEASE='^(main|master)$'
         run: |
           export SCOPE=$(svci scope)
           svci version >> "$GITHUB_OUTPUT"
@@ -77,7 +78,19 @@ jobs:
     env:
       RELEASE_NAME: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #GENERATE_RELEASE_NOTES: true
+  
+  release:
+    runs-on: ubuntu-latest
+    container: tartar4s/semver-ci
+    if: github.ref_name == 'main' || github.ref_name == 'master'
+    needs: [upcoming_version, build]
+    permissions:
+      contents: write
+    steps:
+      - run: svci release -g "$RELEASE_NAME"
+    env:
+      RELEASE_NAME: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 ### GitLab CI/CD
 - [example](https://gitlab.com/attar.sh/semver-ci-example)
@@ -87,7 +100,7 @@ jobs:
 stages:
   - before_build
   - build
-  - after_build
+  - release
 
 upcoming_version:
   stage: before_build
@@ -98,14 +111,18 @@ upcoming_version:
       #export MAJOR='^release/[0-9]+.x.x$'
       #export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
       #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
+      #export RELEASE='^(main|master)$'
     - |
       export SCOPE=$(svci scope)
       svci version >> version.env
   artifacts:
     reports:
+      # version.env:
+      #   UPCOMING_VERSION=v1.7.0-rc.1
+      #   LAST_VERSION=v1.6.0
       dotenv: version.env
   rules:
-    - if: $CI_COMMIT_BRANCH =~ /^(develop|feature\/.+|release\/.+|hotfix\/.+)$/
+    - if: $CI_COMMIT_BRANCH =~ /^(develop|feature\/.+|release\/.+|hotfix\/.+|main|master)$/
 
 build:
   stage: build
@@ -117,7 +134,7 @@ build:
     - if: $CI_COMMIT_BRANCH
 
 release_candidate:
-  stage: after_build
+  stage: release
   image:
     name: tartar4s/semver-ci
     entrypoint: [""]
@@ -125,6 +142,16 @@ release_candidate:
     - svci release -g -p $LAST_VERSION $UPCOMING_VERSION
   rules:
     - if: $CI_COMMIT_BRANCH =~ /^(release\/.+|hotfix\/.+)$/
+
+release:
+  stage: release
+  image:
+    name: tartar4s/semver-ci
+    entrypoint: [""]
+  script:
+    - svci release -g -p $LAST_VERSION $UPCOMING_VERSION
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^(main|master)$/
 ```
 ### Git Repo
 > [!NOTE]

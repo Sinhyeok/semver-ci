@@ -106,7 +106,7 @@ fn prerelease_version(
     let mut upcoming_prerelease_version = git_service::last_tag_by_pattern(
         tag_names,
         &format!(
-            r"^v?{}-{}\.[0-9]+($|\.)",
+            r"^v?{}-{}\.[0-9]+.*$",
             upcoming_official_version_string, prerelease_stage
         ),
         upcoming_version,

@@ -59,14 +59,24 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
         last_version = last_official_tag.to_string(true);
     } else {
         let upcoming_official_version = last_official_tag.increase_by_scope(args.scope);
-        upcoming_version = prerelease_version(
+
+        upcoming_version = upcoming_prerelease_version(
             &tag_names,
             prerelease_stage.clone(),
-            upcoming_official_version,
+            upcoming_official_version.clone(),
             pipeline_info.short_commit_sha,
         );
 
-        last_version = last_tag.to_string(true);
+        let upcoming_official_version_string = upcoming_official_version.to_string(false);
+        last_version = git_service::last_tag_by_pattern(
+            &tag_names,
+            &format!(
+                r"^v?{}-{}\.[0-9]+.*$",
+                upcoming_official_version_string, prerelease_stage
+            ),
+            last_official_tag,
+        )
+        .to_string(true);
     }
 
     println!("UPCOMING_VERSION={}", upcoming_version);
@@ -91,15 +101,14 @@ fn prerelease_stage(branch_name: &str) -> String {
     stage.to_string()
 }
 
-fn prerelease_version(
+fn upcoming_prerelease_version(
     tag_names: &StringArray,
     prerelease_stage: String,
-    upcoming_official_version: SemanticVersion,
+    mut default_prerelease_version: SemanticVersion,
     commit_short_sha: String,
 ) -> String {
-    let upcoming_official_version_string = upcoming_official_version.to_string(false);
-    let mut upcoming_version = upcoming_official_version.clone();
-    upcoming_version
+    let upcoming_official_version_string = default_prerelease_version.to_string(false);
+    default_prerelease_version
         .prerelease_stage
         .clone_from(&prerelease_stage);
 
@@ -109,7 +118,7 @@ fn prerelease_version(
             r"^v?{}-{}\.[0-9]+.*$",
             upcoming_official_version_string, prerelease_stage
         ),
-        upcoming_version,
+        default_prerelease_version,
     )
     .increase_by_scope("prerelease".to_string());
     upcoming_prerelease_version.commit_short_sha = commit_short_sha;

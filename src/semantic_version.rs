@@ -76,6 +76,16 @@ impl SemanticVersion {
         increased
     }
 
+    pub fn release(&mut self) -> SemanticVersion {
+        let mut release_version = self.clone();
+
+        release_version.prerelease_stage = "".to_string();
+        release_version.prerelease_number = 0;
+        release_version.commit_short_sha = "".to_string();
+
+        release_version
+    }
+
     pub fn from_string(version_string: String) -> Result<Self, String> {
         let prefix_stripped = match version_string.strip_prefix('v') {
             Some(stripped) => stripped.to_string(),

@@ -51,6 +51,7 @@ jobs:
           #export MAJOR='^release/[0-9]+.x.x$'
           #export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
           #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
+          #export RELEASE='^(main|master)$'
         run: |
           export SCOPE=$(svci scope)
           svci version >> "$GITHUB_OUTPUT"
@@ -61,14 +62,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: upcoming_version
     steps:
-      - run: echo "$RELEASE_TAG"
+      - run: echo "build $RELEASE_TAG"
     env:
       RELEASE_TAG: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
 
-  release_candidate:
+  release:
     runs-on: ubuntu-latest
     container: tartar4s/semver-ci
-    if: startsWith(github.ref_name, 'release/') || startsWith(github.ref_name, 'hotfix/')
+    if: github.ref_name == 'main' || github.ref_name == 'master' || startsWith(github.ref_name, 'release/') || startsWith(github.ref_name, 'hotfix/')
     needs: [upcoming_version, build]
     permissions:
       contents: write
@@ -77,7 +78,6 @@ jobs:
     env:
       RELEASE_NAME: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #GENERATE_RELEASE_NOTES: true
 ```
 ### GitLab CI/CD
 - [example](https://gitlab.com/attar.sh/semver-ci-example)
@@ -87,7 +87,7 @@ jobs:
 stages:
   - before_build
   - build
-  - after_build
+  - release
 
 upcoming_version:
   stage: before_build
@@ -98,33 +98,35 @@ upcoming_version:
       #export MAJOR='^release/[0-9]+.x.x$'
       #export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
       #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
+      #export RELEASE='^(main|master)$'
     - |
       export SCOPE=$(svci scope)
       svci version >> version.env
   artifacts:
     reports:
+      # version.env:
+      #   UPCOMING_VERSION=v1.7.0-rc.1
+      #   LAST_VERSION=v1.6.0
       dotenv: version.env
   rules:
-    - if: $CI_COMMIT_BRANCH =~ /^(develop|feature\/.+|release\/.+|hotfix\/.+)$/
+    - if: $CI_COMMIT_BRANCH =~ /^(develop|feature\/.+|release\/.+|hotfix\/.+|main|master)$/
 
 build:
   stage: build
-  variables:
-    RELEASE_TAG: $UPCOMING_VERSION
   script:
-    - echo "$RELEASE_TAG"
+    - echo "build $UPCOMING_VERSION"
   rules:
     - if: $CI_COMMIT_BRANCH
 
-release_candidate:
-  stage: after_build
+release:
+  stage: release
   image:
     name: tartar4s/semver-ci
     entrypoint: [""]
   script:
     - svci release -g -p $LAST_VERSION $UPCOMING_VERSION
   rules:
-    - if: $CI_COMMIT_BRANCH =~ /^(release\/.+|hotfix\/.+)$/
+    - if: $CI_COMMIT_BRANCH =~ /^(main|master|release\/.+|hotfix\/.+)$/
 ```
 ### Git Repo
 > [!NOTE]

@@ -112,9 +112,7 @@ fn prerelease_version(
         upcoming_version,
     )
     .increase_by_scope("prerelease".to_string());
-    if prerelease_stage == "dev" {
-        upcoming_prerelease_version.commit_short_sha = commit_short_sha;
-    }
+    upcoming_prerelease_version.commit_short_sha = commit_short_sha;
 
     upcoming_prerelease_version.to_string(true)
 }

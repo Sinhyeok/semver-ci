@@ -1,5 +1,4 @@
 use std::cmp::Ordering;
-use std::ops::Not;
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct SemanticVersion {
@@ -123,29 +122,21 @@ impl SemanticVersion {
     }
 
     pub fn to_string(&self, prefix_v: bool) -> String {
-        let version_string = if self.is_prerelease() {
-            if self.commit_short_sha.is_empty() {
-                format!(
-                    "{}.{}.{}-{}.{}",
-                    self.major,
-                    self.minor,
-                    self.patch,
-                    self.prerelease_stage,
-                    self.prerelease_number
-                )
-            } else {
-                format!(
-                    "{}.{}.{}-{}.{}.{}",
-                    self.major,
-                    self.minor,
-                    self.patch,
-                    self.prerelease_stage,
-                    self.prerelease_number,
-                    self.commit_short_sha
-                )
-            }
-        } else {
-            format!("{}.{}.{}", self.major, self.minor, self.patch)
+        let version_string = match self.prerelease_stage.as_str() {
+            "dev" => format!(
+                "{}.{}.{}-{}.{}.{}",
+                self.major,
+                self.minor,
+                self.patch,
+                self.prerelease_stage,
+                self.prerelease_number,
+                self.commit_short_sha
+            ),
+            "rc" => format!(
+                "{}.{}.{}-{}.{}",
+                self.major, self.minor, self.patch, self.prerelease_stage, self.prerelease_number
+            ),
+            _ => format!("{}.{}.{}", self.major, self.minor, self.patch),
         };
 
         if prefix_v {
@@ -153,10 +144,6 @@ impl SemanticVersion {
         } else {
             version_string
         }
-    }
-
-    fn is_prerelease(&self) -> bool {
-        self.prerelease_stage.is_empty().not()
     }
 
     pub fn default() -> Self {

@@ -21,7 +21,7 @@ jobs:
 
   upcoming_version:
     runs-on: ubuntu-latest
-    container: tartar4s/semver-ci:v0.8.0
+    container: tartar4s/semver-ci:v0.9.0-rc.1
     needs: [ lint ]
     outputs:
       UPCOMING_VERSION: ${{ steps.set_upcoming_version.outputs.UPCOMING_VERSION }}
@@ -64,7 +64,7 @@ jobs:
 
   release_candidate:
     runs-on: ubuntu-latest
-    container: tartar4s/semver-ci:v0.8.0
+    container: tartar4s/semver-ci:v0.9.0-rc.1
     if: startsWith(github.ref_name, 'release/') || startsWith(github.ref_name, 'hotfix/')
     needs: [ upcoming_version, push_to_registry ]
     permissions:

@@ -53,8 +53,13 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
     let prerelease_stage = prerelease_stage(&pipeline_info.branch_name);
     // For release (main, master)
     if args.scope == "release" || prerelease_stage.is_empty() {
-        upcoming_version = upcoming_official_version(&tag_names, &last_official_tag)
-            .unwrap_or_else(|e| panic!("Cannot infer upcoming official version, cause: {}", e));
+        upcoming_version =
+            upcoming_official_version(&tag_names, &last_official_tag).map_err(|e| {
+                Box::new(DefaultError {
+                    message: "Cannot infer upcoming official version".to_string(),
+                    source: Some(e),
+                })
+            })?;
         last_version = last_official_tag.to_string(true);
     // For pre-release (develop, feature/*, release/*, hotfix/*)
     } else {
@@ -100,17 +105,23 @@ fn prerelease_stage(branch_name: &str) -> String {
 fn upcoming_official_version(
     tag_names: &StringArray,
     last_official_version: &SemanticVersion,
-) -> Result<String, String> {
+) -> Result<String, Box<dyn Error>> {
     match git_service::last_tag_by_pattern(tag_names, SEMANTIC_VERSION_TAG_PRERELEASE_PATTERN, None)
     {
         Some(mut last_prerelease_tag) => match last_prerelease_tag.cmp(last_official_version) {
             Ordering::Greater => Ok(last_prerelease_tag.release().to_string(true)),
-            _ => Err(format!(
-                "There are no pre-release tags after last official tag({})",
-                last_official_version.to_string(true)
-            )),
+            _ => Err(Box::new(DefaultError {
+                message: format!(
+                    "There are no pre-release tags after last official tag({})",
+                    last_official_version.to_string(true)
+                ),
+                source: None,
+            })),
         },
-        None => Err("Not found pre-release tags".to_string()),
+        None => Err(Box::new(DefaultError {
+            message: "Not found pre-release tags".to_string(),
+            source: None,
+        })),
     }
 }
 

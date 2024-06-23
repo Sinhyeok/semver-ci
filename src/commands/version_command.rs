@@ -5,12 +5,13 @@ use crate::{config, git_service};
 use clap::Args;
 use git2::string_array::StringArray;
 use regex::Regex;
+use std::cmp::Ordering;
 use std::error::Error;
 
 const DEV_PATTERN: &str = r"^(develop|feature/.*)$";
 const RELEASE_CANDIDATE_PATTERN: &str = r"^(release|hotfix)/.*$";
 const SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+)$";
-const SEMANTIC_VERSION_TAG_ALL_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+.*)$";
+const SEMANTIC_VERSION_TAG_PRERELEASE_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+-.+)$";
 
 #[derive(Args)]
 pub(crate) struct VersionCommandArgs {
@@ -42,21 +43,20 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
     let mut last_official_tag = git_service::last_tag_by_pattern(
         &tag_names,
         SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN,
-        SemanticVersion::default(),
-    );
-    let mut last_tag = git_service::last_tag_by_pattern(
-        &tag_names,
-        SEMANTIC_VERSION_TAG_ALL_PATTERN,
-        SemanticVersion::default(),
-    );
+        Some(SemanticVersion::default()),
+    )
+    .unwrap();
 
     let upcoming_version;
     let last_version;
 
     let prerelease_stage = prerelease_stage(&pipeline_info.branch_name);
+    // For release (main, master)
     if args.scope == "release" || prerelease_stage.is_empty() {
-        upcoming_version = last_tag.release().to_string(true);
+        upcoming_version = upcoming_official_version(&tag_names, &last_official_tag)
+            .unwrap_or_else(|e| panic!("Cannot infer upcoming official version, cause: {}", e));
         last_version = last_official_tag.to_string(true);
+    // For pre-release (develop, feature/*, release/*, hotfix/*)
     } else {
         let upcoming_official_version = last_official_tag.increase_by_scope(args.scope);
 
@@ -67,16 +67,12 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
             pipeline_info.short_commit_sha,
         );
 
-        let upcoming_official_version_string = upcoming_official_version.to_string(false);
-        last_version = git_service::last_tag_by_pattern(
+        last_version = last_prerelease_version(
             &tag_names,
-            &format!(
-                r"^v?{}-{}\.[0-9]+.*$",
-                upcoming_official_version_string, prerelease_stage
-            ),
+            prerelease_stage,
             last_official_tag,
-        )
-        .to_string(true);
+            upcoming_official_version.to_string(false),
+        );
     }
 
     println!("UPCOMING_VERSION={}", upcoming_version);
@@ -101,14 +97,31 @@ fn prerelease_stage(branch_name: &str) -> String {
     stage.to_string()
 }
 
+fn upcoming_official_version(
+    tag_names: &StringArray,
+    last_official_version: &SemanticVersion,
+) -> Result<String, String> {
+    match git_service::last_tag_by_pattern(tag_names, SEMANTIC_VERSION_TAG_PRERELEASE_PATTERN, None)
+    {
+        Some(mut last_prerelease_tag) => match last_prerelease_tag.cmp(last_official_version) {
+            Ordering::Greater => Ok(last_prerelease_tag.release().to_string(true)),
+            _ => Err(format!(
+                "There are no pre-release tags after last official tag({})",
+                last_official_version.to_string(true)
+            )),
+        },
+        None => Err("Not found pre-release tags".to_string()),
+    }
+}
+
 fn upcoming_prerelease_version(
     tag_names: &StringArray,
     prerelease_stage: String,
-    mut default_prerelease_version: SemanticVersion,
+    mut upcoming_official_version: SemanticVersion,
     commit_short_sha: String,
 ) -> String {
-    let upcoming_official_version_string = default_prerelease_version.to_string(false);
-    default_prerelease_version
+    let upcoming_official_version_string = upcoming_official_version.to_string(false);
+    upcoming_official_version
         .prerelease_stage
         .clone_from(&prerelease_stage);
 
@@ -118,10 +131,29 @@ fn upcoming_prerelease_version(
             r"^v?{}-{}\.[0-9]+.*$",
             upcoming_official_version_string, prerelease_stage
         ),
-        default_prerelease_version,
+        Some(upcoming_official_version),
     )
+    .unwrap()
     .increase_by_scope("prerelease".to_string());
     upcoming_prerelease_version.commit_short_sha = commit_short_sha;
 
     upcoming_prerelease_version.to_string(true)
+}
+
+fn last_prerelease_version(
+    tag_names: &StringArray,
+    prerelease_stage: String,
+    last_official_version: SemanticVersion,
+    upcoming_official_version: String,
+) -> String {
+    git_service::last_tag_by_pattern(
+        tag_names,
+        &format!(
+            r"^v?{}-{}\.[0-9]+.*$",
+            upcoming_official_version, prerelease_stage
+        ),
+        Some(last_official_version),
+    )
+    .unwrap()
+    .to_string(true)
 }

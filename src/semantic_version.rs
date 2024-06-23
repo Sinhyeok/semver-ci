@@ -22,7 +22,17 @@ impl Ord for SemanticVersion {
             .cmp(&other.major)
             .then_with(|| self.minor.cmp(&other.minor))
             .then_with(|| self.patch.cmp(&other.patch))
+            .then_with(|| compare_prerelease_stage(&self.prerelease_stage, &other.prerelease_stage))
             .then_with(|| self.prerelease_number.cmp(&other.prerelease_number))
+    }
+}
+
+fn compare_prerelease_stage(stage1: &String, stage2: &String) -> Ordering {
+    match (stage1.is_empty(), stage2.is_empty()) {
+        (true, true) => Ordering::Equal,
+        (true, false) => Ordering::Greater,
+        (false, true) => Ordering::Less,
+        (false, false) => stage1.cmp(stage2),
     }
 }
 

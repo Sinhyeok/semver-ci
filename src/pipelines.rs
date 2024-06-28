@@ -2,6 +2,7 @@ mod git_repo;
 mod github_actions;
 mod gitlab_ci;
 
+use crate::default_error::DefaultError;
 use crate::pipelines::git_repo::GitRepo;
 use crate::pipelines::github_actions::{GithubActions, GITHUB_ACTIONS};
 use crate::pipelines::gitlab_ci::{GitlabCI, GITLAB_CI};
@@ -9,6 +10,7 @@ use crate::release::Release;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::env;
+use std::error::Error;
 
 pub(crate) trait Pipeline {
     fn init(&self) {}
@@ -21,8 +23,11 @@ pub(crate) trait Pipeline {
     fn force_fetch_tags(&self) -> bool {
         true
     }
-    fn create_release(&self, _release: &Release) -> HashMap<String, Value> {
-        panic!("Not supported pipeline: {}", self.name())
+    fn create_release(&self, _release: &Release) -> Result<HashMap<String, Value>, Box<dyn Error>> {
+        Err(Box::new(DefaultError {
+            message: format!("Not supported pipeline: {}", self.name()),
+            source: None,
+        }))
     }
 
     fn info(&self) -> PipelineInfo {

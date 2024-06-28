@@ -46,7 +46,7 @@ pub(crate) fn run(args: ReleaseCommandArgs) -> Result<(), Box<dyn Error>> {
     };
 
     let pipeline = pipelines::current_pipeline();
-    let parsed = pipeline.create_release(&release);
+    let parsed = pipeline.create_release(&release)?;
 
     println!("{:#?}", parsed);
 

@@ -109,11 +109,10 @@ impl GitlabCI {
     fn web_compare_url(&self, from: &str, to: &str) -> String {
         format!(
             r#"# What's Changed
-{}/-/compare/{}...{}?from_project_id={}"#,
+{}/-/compare/{}...{}"#,
             config::env_var("CI_PROJECT_URL"),
             from,
-            to,
-            config::env_var("CI_PROJECT_ID")
+            to
         )
     }
 

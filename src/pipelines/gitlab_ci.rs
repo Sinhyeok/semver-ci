@@ -4,6 +4,7 @@ use crate::{config, git_service, http_service};
 use reqwest::header::HeaderMap;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::error::Error;
 
 pub(crate) struct GitlabCI;
 
@@ -39,7 +40,7 @@ impl Pipeline for GitlabCI {
         config::env_var_or("SEMVER_CI_TOKEN", &config::env_var("CI_JOB_TOKEN"))
     }
 
-    fn create_release(&self, release: &Release) -> HashMap<String, Value> {
+    fn create_release(&self, release: &Release) -> Result<HashMap<String, Value>, Box<dyn Error>> {
         let url = format!(
             "{}/projects/{}/releases",
             config::env_var("CI_API_V4_URL"),
@@ -85,7 +86,10 @@ impl GitlabCI {
             if from == "v0.0.0" {
                 notes += &self.commits(to);
             } else {
-                notes += &self.compare(from, to);
+                notes += &self.compare(from, to).unwrap_or_else(|e| {
+                    println!("{}", e);
+                    self.web_compare_url(from, to)
+                })
             }
         }
 
@@ -102,7 +106,17 @@ impl GitlabCI {
         format!(r#"Full Changelog: {}"#, commits)
     }
 
-    fn compare(&self, from: &str, to: &str) -> String {
+    fn web_compare_url(&self, from: &str, to: &str) -> String {
+        format!(
+            r#"# What's Changed
+{}/-/compare/{}...{}"#,
+            config::env_var("CI_PROJECT_URL"),
+            from,
+            to
+        )
+    }
+
+    fn compare(&self, from: &str, to: &str) -> Result<String, Box<dyn Error>> {
         let url = format!(
             "{}/projects/{}/repository/compare",
             config::env_var("CI_API_V4_URL"),
@@ -119,7 +133,7 @@ impl GitlabCI {
         query.insert("from", from);
         query.insert("to", to);
 
-        let parsed = http_service::get(url, Some(headers), Some(query));
+        let parsed = http_service::get(url, Some(headers), Some(query))?;
         let commits = self.collect_commits(&parsed);
         let empty_string_value = Value::String("".to_string());
         let full_diff = parsed
@@ -128,13 +142,13 @@ impl GitlabCI {
             .as_str()
             .unwrap_or("");
 
-        format!(
+        Ok(format!(
             r#"## What's Changed
 {}
 
 Full Changelog: {}"#,
             commits, full_diff
-        )
+        ))
     }
 
     fn collect_commits(&self, compare_response: &HashMap<String, Value>) -> String {

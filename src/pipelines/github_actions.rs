@@ -5,6 +5,7 @@ use git2::Repository;
 use reqwest::header::HeaderMap;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::error::Error;
 
 pub(crate) struct GithubActions;
 
@@ -46,7 +47,7 @@ impl Pipeline for GithubActions {
         config::env_var("GITHUB_TOKEN")
     }
 
-    fn create_release(&self, release: &Release) -> HashMap<String, Value> {
+    fn create_release(&self, release: &Release) -> Result<HashMap<String, Value>, Box<dyn Error>> {
         let url = format!(
             "{}/repos/{}/releases",
             config::env_var("GITHUB_API_URL"),

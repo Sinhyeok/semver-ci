@@ -1,10 +1,12 @@
 use crate::config;
+use crate::default_error::DefaultError;
 use reqwest::blocking::Response;
 use reqwest::header::HeaderMap;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::error::Error;
 
-fn handle_response(response: Response) -> HashMap<String, Value> {
+fn handle_response(response: Response) -> Result<HashMap<String, Value>, Box<dyn Error>> {
     let status = response.status();
     if status.is_success() {
         if !config::is_production() {
@@ -18,14 +20,17 @@ fn handle_response(response: Response) -> HashMap<String, Value> {
             println!("    body: {:#?}", parsed);
         }
 
-        parsed
+        Ok(parsed)
     } else {
         let headers = response.headers().clone();
         let body = response.text().unwrap();
-        panic!(
-            "Status: {}\nHeaders:\n{:#?}\nBody:\n{}",
-            status, headers, body
-        )
+        Err(Box::new(DefaultError {
+            message: format!(
+                "Status: {}\nHeaders:\n{:#?}\nBody:\n{}",
+                status, headers, body
+            ),
+            source: None,
+        }))
     }
 }
 
@@ -33,7 +38,7 @@ pub(crate) fn post(
     url: String,
     headers: Option<HeaderMap>,
     body: Option<HashMap<&str, Value>>,
-) -> HashMap<String, Value> {
+) -> Result<HashMap<String, Value>, Box<dyn Error>> {
     let mut request_builder = reqwest::blocking::Client::new().post(url);
     if headers.is_some() {
         request_builder = request_builder.headers(headers.unwrap());
@@ -48,10 +53,10 @@ pub(crate) fn post(
     }
 
     if config::is_test() {
-        return HashMap::new();
+        return Ok(HashMap::new());
     }
 
-    let response = request_builder.send().unwrap_or_else(|e| panic!("{}", e));
+    let response = request_builder.send()?;
 
     handle_response(response)
 }
@@ -60,7 +65,7 @@ pub(crate) fn get(
     url: String,
     headers: Option<HeaderMap>,
     query: Option<HashMap<&str, &str>>,
-) -> HashMap<String, Value> {
+) -> Result<HashMap<String, Value>, Box<dyn Error>> {
     let mut request_builder = reqwest::blocking::Client::new().get(url);
     if headers.is_some() {
         request_builder = request_builder.headers(headers.unwrap());
@@ -77,10 +82,10 @@ pub(crate) fn get(
         let mut mock = HashMap::new();
         mock.insert("commits".to_string(), serde_json::json!("[]"));
         mock.insert("web_url".to_string(), serde_json::json!(""));
-        return mock;
+        return Ok(mock);
     }
 
-    let response = request_builder.send().unwrap_or_else(|e| panic!("{}", e));
+    let response = request_builder.send()?;
 
     handle_response(response)
 }

@@ -86,7 +86,10 @@ impl GitlabCI {
             if from == "v0.0.0" {
                 notes += &self.commits(to);
             } else {
-                notes += &self.compare(from, to).unwrap_or_else(|e| panic!("{}", e));
+                notes += &self.compare(from, to).unwrap_or_else(|e| {
+                    println!("{}", e);
+                    self.web_compare_url(from, to)
+                })
             }
         }
 
@@ -101,6 +104,17 @@ impl GitlabCI {
         );
 
         format!(r#"Full Changelog: {}"#, commits)
+    }
+
+    fn web_compare_url(&self, from: &str, to: &str) -> String {
+        format!(
+            r#"# What's Changed
+{}/-/compare/{}...{}?from_project_id={}"#,
+            config::env_var("CI_PROJECT_URL"),
+            from,
+            to,
+            config::env_var("CI_PROJECT_ID")
+        )
     }
 
     fn compare(&self, from: &str, to: &str) -> Result<String, Box<dyn Error>> {

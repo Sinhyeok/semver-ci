@@ -1,5 +1,6 @@
 use crate::config;
 use crate::default_error::DefaultError;
+use log::info;
 use reqwest::blocking::Response;
 use reqwest::header::HeaderMap;
 use serde_json::Value;
@@ -9,16 +10,12 @@ use std::error::Error;
 fn handle_response(response: Response) -> Result<HashMap<String, Value>, Box<dyn Error>> {
     let status = response.status();
     if status.is_success() {
-        if !config::is_production() {
-            println!("{:#?}", response);
-        }
+        info!("{:#?}", response);
 
         let parsed = response
             .json::<HashMap<String, Value>>()
             .unwrap_or_else(|e| panic!("{}", e));
-        if !config::is_production() {
-            println!("    body: {:#?}", parsed);
-        }
+        info!("    body: {:#?}", parsed);
 
         Ok(parsed)
     } else {
@@ -47,10 +44,8 @@ pub(crate) fn post(
         request_builder = request_builder.json(&body.clone().unwrap());
     }
 
-    if !config::is_production() {
-        println!("{:#?}", request_builder);
-        println!("    body: {:#?}", body);
-    }
+    info!("{:#?}", request_builder);
+    info!("    body: {:#?}", body);
 
     if config::is_test() {
         return Ok(HashMap::new());
@@ -74,9 +69,7 @@ pub(crate) fn get(
         request_builder = request_builder.query(&query.unwrap());
     }
 
-    if !config::is_production() {
-        println!("{:#?}", request_builder);
-    }
+    info!("{:#?}", request_builder);
 
     if config::is_test() {
         let mut mock = HashMap::new();

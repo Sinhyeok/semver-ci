@@ -146,6 +146,20 @@ docker run -v .:/app tartar4s/semver-ci scope --help
 docker run -v .:/app tartar4s/semver-ci tag --help
 ```
 
+## Installation
+### Using Docker (recommended for CI)
+```shell
+docker pull tartar4s/semver-ci
+```
+
+### Build from source
+```shell
+git clone https://github.com/Sinhyeok/semver-ci.git
+cd semver-ci
+cargo build --release
+./target/release/svci --version
+```
+
 ## Commands
 ### version
 Print upcoming version based on last semantic version tag and branch
@@ -159,7 +173,7 @@ Options:
 ```
 #### Example
 ```shell
-% svci verion
+% svci version
 UPCOMING_VERSION=v0.8.0-dev.1.c8ae805d
 LAST_VERSION=v0.7.1
 ```
@@ -181,7 +195,7 @@ Options:
 minor
 ```
 ### release
-Create a release in Github or GitLab
+Create a release in GitHub or GitLab
 ```shell
 Usage: svci release [OPTIONS] <NAME>
 
@@ -234,7 +248,7 @@ vi .env
 ```
 #### Example `.env`
 ```dotenv
-# Github
+# GitHub
 ## develop
 #GITHUB_ACTIONS=true
 #GITHUB_REF_NAME=develop
@@ -247,7 +261,7 @@ vi .env
 # GitLab
 ## develop
 GITLAB_CI=true
-CI_COMMIT_BRANCH=develop
+CI_COMMIT_REF_NAME=develop
 CI_COMMIT_SHORT_SHA=g9i0tlab
 GITLAB_USER_EMAIL=user@mail.com
 SEMVER_CI_TOKEN=glpat_908d21yh0ewfd98h
@@ -255,7 +269,7 @@ CI_JOB_TOKEN=vn0w9e7dfgy97esd8f
 CI_PROJECT_URL=https://gitlab.com/attar.sh/semver-ci
 ## hotfix
 #GITLAB_CI=true
-#CI_COMMIT_BRANCH=hotfix/0.2.34
+#CI_COMMIT_REF_NAME=hotfix/0.2.34
 #CI_COMMIT_SHORT_SHA=b08640bd
 
 # Git Repo
@@ -284,3 +298,13 @@ rustup component add clippy rustfmt
 cargo clippy
 cargo fmt
 ```
+
+## Troubleshooting
+- Detached HEAD: Ensure a branch is checked out. In CI, the ref is fetched and checked out automatically.
+- Auth/token errors: GitHub requires GITHUB_TOKEN; GitLab requires CI_JOB_TOKEN or SEMVER_CI_TOKEN.
+- Tags not up to date: Set FORCE_FETCH_TAGS=true to force-sync remote tags.
+- SSH auth: Set GIT_SSH_KEY_PATH and, if needed, GIT_SSH_KEY_PASSPHRASE.
+
+## Contributing & License
+- Contributing: See `.github/CONTRIBUTING.md`
+- License: See `LICENSE`

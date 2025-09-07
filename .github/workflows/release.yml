@@ -4,7 +4,7 @@ on:
       - '**/README.md'
       - '**/LICENSE'
 
-name: Development
+name: Release
 
 jobs:
   lint:
@@ -63,7 +63,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     container: tartar4s/semver-ci:v0.9.3
-    if: startsWith(github.ref_name, 'main/') || startsWith(github.ref_name, 'release/') || startsWith(github.ref_name, 'hotfix/')
+    if: github.ref_name == 'main' || startsWith(github.ref_name, 'release/') || startsWith(github.ref_name, 'hotfix/')
     needs: [ upcoming_version, push_to_registry ]
     permissions:
       contents: write

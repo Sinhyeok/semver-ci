@@ -11,7 +11,11 @@ fn sh(args: &[&str]) {
 }
 
 fn sh_in(dir: &Path, args: &[&str]) {
-    let status = Command::new("git").current_dir(dir).args(args).status().unwrap();
+    let status = Command::new("git")
+        .current_dir(dir)
+        .args(args)
+        .status()
+        .unwrap();
     assert!(status.success());
 }
 
@@ -82,7 +86,9 @@ fn feature_with_prerelease_tag_advances_prerelease() {
     run_svci_in(tmp.path())
         .success()
         .stdout(predicate::str::contains("UPCOMING_VERSION=v1.3.0-dev.2"))
-        .stdout(predicate::str::contains("LAST_VERSION=v1.3.0-dev.1.abcd1234"));
+        .stdout(predicate::str::contains(
+            "LAST_VERSION=v1.3.0-dev.1.abcd1234",
+        ));
 }
 
 #[test]
@@ -149,5 +155,3 @@ fn main_branch_with_no_tags() {
         .stdout(predicate::str::contains("UPCOMING_VERSION=v0.1.0"))
         .stdout(predicate::str::contains("LAST_VERSION=v0.0.0"));
 }
-
-

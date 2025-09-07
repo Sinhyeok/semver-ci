@@ -16,10 +16,6 @@ fn environment() -> String {
     env::var("ENVIRONMENT").unwrap_or("production".to_string())
 }
 
-pub(crate) fn is_production() -> bool {
-    environment() == "production"
-}
-
 pub(crate) fn is_test() -> bool {
     environment() == "test"
 }

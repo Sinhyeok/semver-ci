@@ -1,6 +1,7 @@
 use crate::pipelines::Pipeline;
 use crate::release::Release;
 use crate::{config, git_service, http_service};
+use log::error;
 use reqwest::header::HeaderMap;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -87,7 +88,7 @@ impl GitlabCI {
                 notes += &self.commits(to);
             } else {
                 notes += &self.compare(from, to).unwrap_or_else(|e| {
-                    println!("{}", e);
+                    error!("{}", e);
                     self.web_compare_url(from, to)
                 })
             }

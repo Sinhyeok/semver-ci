@@ -13,9 +13,10 @@ use dotenv::dotenv;
 
 fn main() {
     dotenv().ok();
+    env_logger::init();
 
     commands::run().unwrap_or_else(|e| match e.source() {
-        Some(source) => panic!("{}\nCaused by: {}", e, source),
+        Some(source) => panic!("{}\n    Caused by: {}", e, source),
         None => panic!("{}", e),
     });
 }

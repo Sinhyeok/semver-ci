@@ -4,6 +4,7 @@ use git2::{
     Config, Cred, CredentialType, Error, FetchOptions, ObjectType, Oid, PushOptions,
     RemoteCallbacks, Repository,
 };
+use log::error;
 use regex::Regex;
 use std::env;
 use std::ops::Not;
@@ -39,7 +40,7 @@ pub(crate) fn last_tag_by_pattern(
 
         match SemanticVersion::from_string(tag_name.to_string()) {
             Ok(version) => valid_versions.push(version),
-            Err(msg) => eprintln!("{}", msg),
+            Err(msg) => error!("{}", msg),
         }
     }
 

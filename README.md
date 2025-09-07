@@ -1,5 +1,4 @@
-![development workflow](https://github.com/Sinhyeok/semver-ci/actions/workflows/development.yml/badge.svg)
-![publish workflow](https://github.com/Sinhyeok/semver-ci/actions/workflows/publish.yml/badge.svg)
+![release workflow](https://github.com/Sinhyeok/semver-ci/actions/workflows/release.yml/badge.svg)
 
 # Semver-CI
 

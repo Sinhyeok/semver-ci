@@ -1,7 +1,5 @@
 on:
   push:
-    branches-ignore:
-      - 'main'
     paths-ignore:
       - '**/README.md'
       - '**/LICENSE'
@@ -62,10 +60,10 @@ jobs:
           tags: tartar4s/semver-ci:${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
           labels: ${{ steps.meta.outputs.labels }}
 
-  release_candidate:
+  release:
     runs-on: ubuntu-latest
     container: tartar4s/semver-ci:v0.9.3
-    if: startsWith(github.ref_name, 'release/') || startsWith(github.ref_name, 'hotfix/')
+    if: startsWith(github.ref_name, 'main/') || startsWith(github.ref_name, 'release/') || startsWith(github.ref_name, 'hotfix/')
     needs: [ upcoming_version, push_to_registry ]
     permissions:
       contents: write

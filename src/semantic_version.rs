@@ -190,3 +190,47 @@ fn metadata(metadata_string: &str) -> Result<(String, u64, String), String> {
 
     Ok((prerelease_stage, prerelease_number, short_commit_sha))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_official_and_prerelease_versions() {
+        let v = SemanticVersion::from_string("1.2.3".to_string()).unwrap();
+        assert_eq!(v.major, 1);
+        assert_eq!(v.minor, 2);
+        assert_eq!(v.patch, 3);
+        assert_eq!(v.prerelease_stage, "");
+        assert_eq!(v.prerelease_number, 0);
+        assert_eq!(v.commit_short_sha, "");
+
+        let rc = SemanticVersion::from_string("1.2.3-rc.4".to_string()).unwrap();
+        assert_eq!(rc.prerelease_stage, "rc");
+        assert_eq!(rc.prerelease_number, 4);
+        assert_eq!(rc.to_string(true), "v1.2.3-rc.4");
+
+        let dev = SemanticVersion::from_string("1.2.3-dev.7.abcd1234".to_string()).unwrap();
+        assert_eq!(dev.prerelease_stage, "dev");
+        assert_eq!(dev.prerelease_number, 7);
+        assert_eq!(dev.commit_short_sha, "abcd1234");
+        assert_eq!(dev.to_string(false), "1.2.3-dev.7.abcd1234");
+    }
+
+    #[test]
+    fn increase_and_release_behaviors() {
+        let mut v = SemanticVersion::from_string("1.2.3-rc.1".to_string()).unwrap();
+
+        let minor = v.increase_by_scope("minor".to_string());
+        assert_eq!(minor.to_string(false), "1.3.0-rc.1");
+
+        let patch = v.increase_by_scope("patch".to_string());
+        assert_eq!(patch.to_string(false), "1.2.4-rc.1");
+
+        let pre = v.increase_by_scope("prerelease".to_string());
+        assert_eq!(pre.to_string(false), "1.2.3-rc.2");
+
+        let rel = v.release();
+        assert_eq!(rel.to_string(true), "v1.2.3");
+    }
+}

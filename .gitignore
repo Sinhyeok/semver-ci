@@ -12,4 +12,7 @@ target/
 # Jetbranins IDE
 .idea
 
+# Cursor
+.cursor
+
 .env

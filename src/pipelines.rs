@@ -43,9 +43,9 @@ pub(crate) trait Pipeline {
 }
 
 pub(crate) fn current_pipeline() -> &'static dyn Pipeline {
-    let pipeline = if env::var(GITHUB_ACTIONS).map_or(false, |v| v == "true") {
+    let pipeline = if env::var(GITHUB_ACTIONS).is_ok_and(|v| v == "true") {
         &GithubActions as &dyn Pipeline
-    } else if env::var(GITLAB_CI).map_or(false, |v| v == "true") {
+    } else if env::var(GITLAB_CI).is_ok_and(|v| v == "true") {
         &GitlabCI as &dyn Pipeline
     } else {
         &GitRepo as &dyn Pipeline

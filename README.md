@@ -247,6 +247,13 @@ Options:
 brew install rustup cmake
 ```
 ### Setup Project
+The project pins Rust and Cargo to **1.98.1** in `rust-toolchain.toml`.
+Rustup installs that toolchain and the configured targets when you run Cargo.
+Local development, CI, and Docker builds all use this file.
+The Docker bootstrap image uses `rust:1.98-bookworm` to track published patch
+updates within Rust 1.98. Rustup installs and selects the project's **1.98.1**
+toolchain inside that builder.
+
 ```shell
 # Clone project
 git clone git@github.com:Sinhyeok/semver-ci.git

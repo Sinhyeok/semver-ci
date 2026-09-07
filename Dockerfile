@@ -2,8 +2,9 @@
 
 ARG VARIANT=alpine
 
-# rust-toolchain.toml selects the Rust and Cargo versions for the application build.
-FROM rust:1.79.0-bookworm AS build-base
+# Track published patch updates within Rust 1.98 for the bootstrap image.
+# rust-toolchain.toml selects Rust and Cargo 1.98.1 for the application build.
+FROM rust:1.98-bookworm AS build-base
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends cmake musl-tools && \

@@ -208,8 +208,5 @@ fn ssh_key_path() -> String {
 }
 
 fn ssh_key_passphrase() -> Option<String> {
-    match env::var("GIT_SSH_KEY_PASSPHRASE") {
-        Ok(s) => Some(s),
-        Err(_e) => None,
-    }
+    env::var("GIT_SSH_KEY_PASSPHRASE").ok()
 }

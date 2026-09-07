@@ -330,6 +330,8 @@ The release workflow explicitly uses `CARGO_PROFILE=dev` to preserve the debug
 builds previously produced by `debug.Dockerfile`. It builds each variant once,
 runs the container checks, and pushes the tested image. The reusable CI workflow
 runs Rust lint and tests.
+The release workflow runs only on pushes to `develop`, `main`, `release/**`, and
+`hotfix/**`. Feature pull requests run PR CI.
 
 ## Troubleshooting
 - Detached HEAD: Ensure a branch is checked out. In CI, the ref is fetched and checked out automatically.

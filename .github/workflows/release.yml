@@ -1,5 +1,10 @@
 on:
   push:
+    branches:
+      - develop
+      - main
+      - 'release/**'
+      - 'hotfix/**'
     paths-ignore:
       - '**/README.md'
       - '**/LICENSE'

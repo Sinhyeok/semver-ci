@@ -7,20 +7,13 @@ on:
 name: Release
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out the repo
-        uses: actions/checkout@v4
-      - name: Formatter
-        run: cargo fmt --all -- --check
-      - name: Lint
-        run: cargo clippy -- -Dwarnings
+  ci:
+    uses: ./.github/workflows/ci.yml
 
   upcoming_version:
     runs-on: ubuntu-latest
     container: tartar4s/semver-ci:v0.9.4
-    needs: [ lint ]
+    needs: [ ci ]
     outputs:
       UPCOMING_VERSION: ${{ steps.set_upcoming_version.outputs.UPCOMING_VERSION }}
     steps:

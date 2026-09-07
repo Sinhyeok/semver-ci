@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - '**/README.md'
+      - '**/LICENSE'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      - name: Install the toolchain from rust-toolchain.toml
+        run: rustup show active-toolchain
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Lint all targets and features
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+  test:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      - name: Install the toolchain from rust-toolchain.toml
+        run: rustup show active-toolchain
+      - name: Test
+        run: cargo test --locked --all-features

@@ -1,5 +1,4 @@
 use crate::semantic_version::SemanticVersion;
-use git2::string_array::StringArray;
 use git2::{
     Config, Cred, CredentialType, Error, FetchOptions, ObjectType, Oid, PushOptions,
     RemoteCallbacks, Repository,
@@ -15,25 +14,59 @@ pub(crate) fn tag_names(
     force_fetch_tags: bool,
     git_username: &str,
     git_token: &str,
-) -> Result<StringArray, Error> {
+) -> Result<Vec<String>, Error> {
     let repo = Repository::open(repo_path)?;
 
     if force_fetch_tags {
         fetch_refs(&repo, git_username, git_token, &["refs/tags/*:refs/tags/*"])?;
     }
 
-    repo.tag_names(None)
+    Ok(repo
+        .tag_names(None)?
+        .iter()
+        .flatten()
+        .map(str::to_owned)
+        .collect())
+}
+
+pub(crate) fn reachable_tag_names(
+    repo_path: &str,
+    tag_names: &[String],
+    target: &str,
+) -> Result<Vec<String>, Error> {
+    let repo = Repository::open(repo_path)?;
+    if repo.is_shallow() {
+        return Err(Error::from_str(
+            "Official version calculation requires complete history. Run git fetch --unshallow --tags, or configure a full CI checkout.",
+        ));
+    }
+    let target = repo.revparse_single(target)?.peel_to_commit()?.id();
+    let mut reachable = Vec::new();
+    for tag_name in tag_names {
+        // Non-version tags cannot affect version calculation.
+        if SemanticVersion::from_string(tag_name.clone()).is_err() {
+            continue;
+        }
+        let commit = repo
+            .find_reference(&format!("refs/tags/{tag_name}"))?
+            .peel_to_commit()?
+            .id();
+        if target == commit || repo.graph_descendant_of(target, commit)? {
+            reachable.push(tag_name.clone());
+        }
+    }
+    Ok(reachable)
 }
 
 pub(crate) fn last_tag_by_pattern(
-    tag_names: &StringArray,
+    tag_names: &[String],
     tag_pattern: &str,
     default: Option<SemanticVersion>,
 ) -> Option<SemanticVersion> {
     let tag_regex = Regex::new(tag_pattern).unwrap();
     let mut valid_versions: Vec<SemanticVersion> = vec![];
 
-    for tag_name in tag_names.iter().flatten() {
+    for tag_name in tag_names {
         if tag_regex.is_match(tag_name).not() {
             continue;
         }

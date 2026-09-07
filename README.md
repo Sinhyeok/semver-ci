@@ -187,6 +187,36 @@ Options:
 UPCOMING_VERSION=v0.8.0-dev.1.c8ae805d
 LAST_VERSION=v0.7.1
 ```
+
+#### Official version selection
+
+On branches that produce official versions (including `main` and `master`), or
+with `--scope release`, version calculation uses only tags at the target commit
+or its ancestors. The target is local `HEAD`, `GITHUB_SHA` in GitHub Actions, or
+`CI_COMMIT_SHA` in GitLab CI. Both the previous official version (`LAST_VERSION`)
+and automatic prerelease candidates are selected from this history. Annotated
+and lightweight tags are supported.
+
+Unmerged release branches do not affect this calculation. For example, a merged
+`v1.2.4-rc.1` is promoted to `v1.2.4` even if an unmerged branch has `v2.0.0-rc.1`.
+If there is no newer reachable prerelease, the existing minor bump is retained:
+`v1.2.3` becomes `v1.3.0`. With no version tags, the initial version is `v0.1.0`
+and `LAST_VERSION` is `v0.0.0`. Prerelease generation on development and release
+branches keeps its existing version and counter selection rules.
+
+Official calculation requires complete commit history and available version
+tags. Shallow repositories fail without printing version outputs; fetching tags
+alone does not remove a shallow history boundary. Use a full checkout (for
+example, `fetch-depth: 0` with `actions/checkout`, or `GIT_DEPTH: "0"` in GitLab
+CI), or run `git fetch --unshallow --tags` for an existing shallow clone. The
+internal GitHub Actions clone fetches full history. Local runs should fetch tags
+first, or set `FORCE_FETCH_TAGS=true` to refresh them through Semver-CI.
+
+Normal merges and fast-forwards preserve candidate ancestry. Squash merges and
+rebases that rewrite tagged commits can remove that relationship; automatic
+selection cannot infer the original candidate from equivalent changes. If no
+newer candidate remains reachable, the minor fallback applies.
+
 ### scope
 Print scope based on branch name
 ```shell

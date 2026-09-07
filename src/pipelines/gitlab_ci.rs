@@ -29,6 +29,10 @@ impl Pipeline for GitlabCI {
         config::env_var("CI_COMMIT_SHORT_SHA")
     }
 
+    fn target_commit(&self) -> String {
+        config::env_var("CI_COMMIT_SHA")
+    }
+
     fn git_username(&self) -> String {
         "gitlab-ci-token".to_string()
     }

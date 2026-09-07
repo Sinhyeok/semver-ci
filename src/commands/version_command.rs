@@ -3,7 +3,6 @@ use crate::pipelines;
 use crate::semantic_version::SemanticVersion;
 use crate::{config, git_service};
 use clap::Args;
-use git2::string_array::StringArray;
 use regex::Regex;
 use std::cmp::Ordering;
 use std::error::Error;
@@ -39,7 +38,19 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
         })
     })?;
 
-    // Last official tag
+    let prerelease_stage = prerelease_stage(&pipeline_info.branch_name);
+    let is_official = args.scope == "release" || prerelease_stage.is_empty();
+    let tag_names = if is_official {
+        git_service::reachable_tag_names(
+            &config::clone_target_path(),
+            &tag_names,
+            &pipeline.target_commit(),
+        )?
+    } else {
+        tag_names
+    };
+
+    // Last official tag (restricted to the target's history for promotion).
     let mut last_official_tag = git_service::last_tag_by_pattern(
         &tag_names,
         SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN,
@@ -47,10 +58,8 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
     )
     .unwrap();
 
-    let prerelease_stage = prerelease_stage(&pipeline_info.branch_name);
     // For release (main, master)
-    let (upcoming_version, last_version) = if args.scope == "release" || prerelease_stage.is_empty()
-    {
+    let (upcoming_version, last_version) = if is_official {
         (
             upcoming_official_version(&tag_names, &last_official_tag),
             last_official_tag.to_string(true),
@@ -98,7 +107,7 @@ fn prerelease_stage(branch_name: &str) -> String {
 }
 
 fn upcoming_official_version(
-    tag_names: &StringArray,
+    tag_names: &[String],
     last_official_version: &SemanticVersion,
 ) -> String {
     match git_service::last_tag_by_pattern(tag_names, SEMANTIC_VERSION_TAG_PRERELEASE_PATTERN, None)
@@ -130,7 +139,7 @@ fn upcoming_official_version(
 }
 
 fn upcoming_prerelease_version(
-    tag_names: &StringArray,
+    tag_names: &[String],
     prerelease_stage: String,
     mut upcoming_official_version: SemanticVersion,
     commit_short_sha: String,
@@ -156,7 +165,7 @@ fn upcoming_prerelease_version(
 }
 
 fn last_prerelease_version(
-    tag_names: &StringArray,
+    tag_names: &[String],
     prerelease_stage: String,
     last_official_version: SemanticVersion,
     upcoming_official_version: String,

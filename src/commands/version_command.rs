@@ -13,6 +13,8 @@ const RELEASE_CANDIDATE_PATTERN: &str = r"^(release|hotfix)/.*$";
 const SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+)$";
 const SEMANTIC_VERSION_TAG_PRERELEASE_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+-.+)$";
 
+type OfficialVersionCandidates<'a> = BTreeMap<(u64, u64, u64), Vec<&'a str>>;
+
 #[derive(Args)]
 pub(crate) struct VersionCommandArgs {
     #[arg(short, long, env, default_value = "minor")]
@@ -132,8 +134,19 @@ fn upcoming_official_version(
     tag_names: &[String],
     last_official_version: &SemanticVersion,
 ) -> Result<String, Box<dyn Error>> {
+    let candidates = collect_official_candidates(tag_names, last_official_version);
+    match select_official_candidate(&candidates)? {
+        Some(version) => Ok(version),
+        None => Ok(minor_fallback_version(last_official_version)),
+    }
+}
+
+fn collect_official_candidates<'a>(
+    tag_names: &'a [String],
+    last_official_version: &SemanticVersion,
+) -> OfficialVersionCandidates<'a> {
     let pattern = Regex::new(SEMANTIC_VERSION_TAG_PRERELEASE_PATTERN).unwrap();
-    let mut candidates: BTreeMap<(u64, u64, u64), Vec<&str>> = BTreeMap::new();
+    let mut candidates = OfficialVersionCandidates::new();
     for tag_name in tag_names {
         if !pattern.is_match(tag_name) {
             continue;
@@ -149,7 +162,12 @@ fn upcoming_official_version(
                 .push(tag_name);
         }
     }
+    candidates
+}
 
+fn select_official_candidate(
+    candidates: &OfficialVersionCandidates<'_>,
+) -> Result<Option<String>, Box<dyn Error>> {
     if candidates.len() > 1 {
         let tags = candidates
             .values()
@@ -164,18 +182,21 @@ fn upcoming_official_version(
             source: None,
         }.into());
     }
-    if let Some((major, minor, patch)) = candidates.keys().next() {
-        return Ok(format!("v{major}.{minor}.{patch}"));
-    }
+    Ok(candidates
+        .keys()
+        .next()
+        .map(|(major, minor, patch)| format!("v{major}.{minor}.{patch}")))
+}
 
+fn minor_fallback_version(last_official_version: &SemanticVersion) -> String {
     log::warn!(
         "No newer reachable pre-release after last official tag ({}). Fallback to minor bump.",
         last_official_version.to_string(true)
     );
-    Ok(last_official_version
+    last_official_version
         .clone()
         .increase_by_scope("minor".to_string())
-        .to_string(true))
+        .to_string(true)
 }
 
 fn explicit_official_version(

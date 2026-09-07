@@ -1,0 +1,66 @@
+name: PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - '**/README.md'
+      - '**/LICENSE'
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+# Fork PRs have a read-only token; their lint and test checks still run in CI.
+# Review comments are advisory. The CI workflow enforces lint and test results.
+jobs:
+  clippy:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Check out the PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Install the toolchain from rust-toolchain.toml
+        run: rustup show active-toolchain
+      - name: Comment on Clippy findings
+        uses: giraffate/clippy-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-pr-review
+          level: warning
+          filter_mode: diff_context
+          fail_on_error: 'false'
+          reviewdog_version: v0.21.0
+          clippy_flags: --locked --all-targets --all-features
+
+  rustfmt:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Check out the PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Install the toolchain from rust-toolchain.toml
+        run: rustup show active-toolchain
+      - name: Generate formatting changes
+        run: cargo fmt --all
+      - name: Suggest formatting changes
+        uses: reviewdog/action-suggester@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tool_name: rustfmt
+          level: warning
+          filter_mode: diff_context
+          fail_level: none

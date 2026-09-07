@@ -58,6 +58,14 @@ pub(crate) fn reachable_tag_names(
     Ok(reachable)
 }
 
+pub(crate) fn tag_commit_id(repo_path: &str, tag_name: &str) -> Result<Oid, Error> {
+    let repo = Repository::open(repo_path)?;
+    let commit = repo
+        .find_reference(&format!("refs/tags/{tag_name}"))?
+        .peel_to_commit()?;
+    Ok(commit.id())
+}
+
 pub(crate) fn last_tag_by_pattern(
     tag_names: &[String],
     tag_pattern: &str,

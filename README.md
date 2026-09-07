@@ -178,6 +178,7 @@ Usage: svci version [OPTIONS]
 
 Options:
   -s, --scope <SCOPE>  [env: SCOPE=] [default: minor]
+      --candidate <TAG>  Promote this exact prerelease tag (official version calculation only) [env: CANDIDATE=]
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -203,6 +204,7 @@ Newer reachable prereleases must agree on a single `major.minor.patch` version.
 For example, `v1.2.4-rc.1` and `v1.2.4-rc.2` both produce `v1.2.4`. If candidates
 for both `v1.2.4` and `v2.0.0` are reachable, the command fails with the candidate
 tag names and prints no version outputs. It does not choose the highest version.
+Use `--candidate <tag>` to resolve this ambiguity explicitly.
 Prereleases at or below the last official version do not create ambiguity.
 
 If there is no newer reachable prerelease, the existing minor bump is retained:
@@ -222,6 +224,35 @@ Normal merges and fast-forwards preserve candidate ancestry. Squash merges and
 rebases that rewrite tagged commits can remove that relationship; automatic
 selection cannot infer the original candidate from equivalent changes. If no
 newer candidate remains reachable, the minor fallback applies.
+
+#### Explicit candidate selection
+
+To promote a specific candidate, including after squash/rebase, pass its exact
+tag name (with or without `v`, matching the existing tag):
+
+```shell
+svci version --scope release --candidate v1.2.4-rc.1
+# UPCOMING_VERSION=v1.2.4
+# LAST_VERSION=v1.2.3
+```
+
+`--candidate` (or the `CANDIDATE` environment variable) selects only that tag;
+the command-line option takes precedence over the environment. It is accepted
+on branches that already calculate official versions, or with `--scope release`.
+Using it during prerelease generation is an error.
+
+The tag must exist, point to a commit, and use a supported prerelease format
+(`X.Y.Z-rc.N` or `X.Y.Z-dev.N.SHA`, optionally prefixed with `v`). Its official
+version must be newer than `LAST_VERSION` and must not already have an official
+tag anywhere in the repository, including an equivalent unprefixed tag.
+Invalid or missing candidates fail without version outputs or a minor fallback.
+
+Explicit selection declares the caller's intent to associate that candidate
+with the target release. The candidate need not be an ancestor of the target;
+the command does not verify equivalent source changes or build artifacts.
+Pipelines that intend to promote a particular RC should always pass it explicitly,
+especially when using squash/rebase. Full history is still required to determine
+`LAST_VERSION`, and all version tags must be available to detect existing releases.
 
 ### scope
 Print scope based on branch name

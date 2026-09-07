@@ -17,6 +17,10 @@ const SEMANTIC_VERSION_TAG_PRERELEASE_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9
 pub(crate) struct VersionCommandArgs {
     #[arg(short, long, env, default_value = "minor")]
     scope: String,
+
+    /// Promote this exact prerelease tag (official version calculation only).
+    #[arg(long, env, value_name = "TAG")]
+    candidate: Option<String>,
 }
 
 pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
@@ -25,8 +29,17 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
     pipeline.init();
     let pipeline_info = pipeline.info();
 
+    let prerelease_stage = prerelease_stage(&pipeline_info.branch_name);
+    let is_official = args.scope == "release" || prerelease_stage.is_empty();
+    if args.candidate.is_some() && !is_official {
+        return Err(DefaultError {
+            message: "--candidate requires official version calculation; use --scope release on this branch.".to_string(),
+            source: None,
+        }.into());
+    }
+
     // Tag names
-    let tag_names = git_service::tag_names(
+    let all_tag_names = git_service::tag_names(
         &config::clone_target_path(),
         pipeline_info.force_fetch_tags,
         &pipeline_info.git_username,
@@ -39,16 +52,22 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
         })
     })?;
 
-    let prerelease_stage = prerelease_stage(&pipeline_info.branch_name);
-    let is_official = args.scope == "release" || prerelease_stage.is_empty();
     let tag_names = if is_official {
+        // Explicit promotion still derives LAST_VERSION from target history,
+        // but does not infer a candidate from ancestry.
+        let official_pattern = Regex::new(SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN).unwrap();
+        let selection_tags: Vec<_> = all_tag_names
+            .iter()
+            .filter(|tag| args.candidate.is_none() || official_pattern.is_match(tag))
+            .cloned()
+            .collect();
         git_service::reachable_tag_names(
             &config::clone_target_path(),
-            &tag_names,
+            &selection_tags,
             &pipeline.target_commit(),
         )?
     } else {
-        tag_names
+        all_tag_names.clone()
     };
 
     // Last official tag (restricted to the target's history for promotion).
@@ -61,10 +80,12 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
 
     // For release (main, master)
     let (upcoming_version, last_version) = if is_official {
-        (
-            upcoming_official_version(&tag_names, &last_official_tag)?,
-            last_official_tag.to_string(true),
-        )
+        let upcoming = if let Some(candidate) = args.candidate.as_deref() {
+            explicit_official_version(candidate, &all_tag_names, &last_official_tag)?
+        } else {
+            upcoming_official_version(&tag_names, &last_official_tag)?
+        };
+        (upcoming, last_official_tag.to_string(true))
     // For pre-release (develop, feature/*, release/*, hotfix/*)
     } else {
         let upcoming_official_version = last_official_tag.increase_by_scope(args.scope);
@@ -138,7 +159,7 @@ fn upcoming_official_version(
             .join(", ");
         return Err(DefaultError {
             message: format!(
-                "Ambiguous official release: reachable prerelease tags target multiple versions: {tags}. Select a single release candidate."
+                "Ambiguous official release: reachable prerelease tags target multiple versions: {tags}. Select one with --candidate <tag>."
             ),
             source: None,
         }.into());
@@ -155,6 +176,56 @@ fn upcoming_official_version(
         .clone()
         .increase_by_scope("minor".to_string())
         .to_string(true))
+}
+
+fn explicit_official_version(
+    candidate: &str,
+    all_tag_names: &[String],
+    last_official_version: &SemanticVersion,
+) -> Result<String, Box<dyn Error>> {
+    let invalid = |reason: String| -> Box<dyn Error> {
+        DefaultError {
+            message: format!("Invalid candidate '{candidate}': {reason}"),
+            source: None,
+        }
+        .into()
+    };
+    if !all_tag_names.iter().any(|tag| tag == candidate) {
+        return Err(invalid(
+            "tag not found; fetch the exact tag before retrying".to_string(),
+        ));
+    }
+    let mut version = SemanticVersion::from_string(candidate.to_string()).map_err(&invalid)?;
+    // The legacy parser tolerates extra fields. Explicit selection must name
+    // one of the supported dev/rc formats without discarding part of the tag.
+    if version.prerelease_stage.is_empty()
+        || version.to_string(candidate.starts_with('v')) != candidate
+    {
+        return Err(invalid(
+            "expected a valid dev or rc prerelease tag".to_string(),
+        ));
+    }
+    git_service::tag_commit_id(&config::clone_target_path(), candidate)
+        .map_err(|error| invalid(format!("tag must point to a commit: {error}")))?;
+    let official = version.release();
+    if official.cmp(last_official_version) != Ordering::Greater {
+        return Err(invalid(format!(
+            "version must be newer than the target's last official version ({})",
+            last_official_version.to_string(true)
+        )));
+    }
+    let official_pattern = Regex::new(SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN).unwrap();
+    for tag in all_tag_names {
+        if official_pattern.is_match(tag)
+            && SemanticVersion::from_string(tag.clone())
+                .is_ok_and(|version| version.cmp(&official) == Ordering::Equal)
+        {
+            return Err(invalid(format!(
+                "official version already exists as tag '{tag}'"
+            )));
+        }
+    }
+    Ok(official.to_string(true))
 }
 
 fn upcoming_prerelease_version(

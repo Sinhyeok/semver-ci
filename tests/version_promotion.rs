@@ -254,3 +254,228 @@ fn already_released_candidates_do_not_make_a_new_candidate_ambiguous() {
     tag(&repo.repo, "v1.2.4-rc.1", candidate, false);
     assert_official(repo.command().arg("version"), "v1.2.4", "v1.2.3");
 }
+
+#[test]
+fn explicit_candidate_resolves_ambiguity_and_overrides_the_environment() {
+    let repo = released_repo();
+    let hotfix = commit(&repo.repo, "main", "fix: hotfix", &[head(&repo.repo)]);
+    tag(&repo.repo, "v1.2.4-rc.1", hotfix, true);
+    let future = commit(&repo.repo, "main", "feat: future", &[hotfix]);
+    tag(&repo.repo, "v2.0.0-rc.1", future, false);
+
+    assert_official(
+        repo.command()
+            .env("CANDIDATE", "v2.0.0-rc.1")
+            .arg("version"),
+        "v2.0.0",
+        "v1.2.3",
+    );
+    assert_official(
+        repo.command().env("CANDIDATE", "v2.0.0-rc.1").args([
+            "version",
+            "--candidate",
+            "v1.2.4-rc.1",
+        ]),
+        "v1.2.4",
+        "v1.2.3",
+    );
+}
+
+#[test]
+fn explicit_candidate_can_select_an_original_tag_after_squash_or_rebase() {
+    for rebase in [false, true] {
+        let repo = released_repo();
+        let base = head(&repo.repo);
+        let first = commit(&repo.repo, "hotfix/1.2.4", "fix: first change", &[base]);
+        let original = commit(&repo.repo, "hotfix/1.2.4", "fix: second change", &[first]);
+        tag(&repo.repo, "v1.2.4-rc.1", original, true);
+        // Construct the rewritten graph: neither squash nor rebase retains
+        // the tagged original commit as a parent of the target.
+        let updated_base = commit(&repo.repo, "main", "chore: main advances", &[base]);
+        let target = if rebase {
+            let rewritten = commit(&repo.repo, "main", "fix: first change", &[updated_base]);
+            commit(&repo.repo, "main", "fix: second change", &[rewritten])
+        } else {
+            commit(
+                &repo.repo,
+                "main",
+                "fix: squash both changes",
+                &[updated_base],
+            )
+        };
+        assert!(!repo.repo.graph_descendant_of(target, original).unwrap());
+        assert_official(repo.command().arg("version"), "v1.3.0", "v1.2.3");
+        assert_official(
+            repo.command().args([
+                "version",
+                "--scope",
+                "release",
+                "--candidate",
+                "v1.2.4-rc.1",
+            ]),
+            "v1.2.4",
+            "v1.2.3",
+        );
+    }
+}
+
+#[test]
+fn explicit_candidate_accepts_supported_formats_and_requires_an_exact_name() {
+    for name in ["v1.2.4-rc.1", "1.2.4-rc.1", "v1.2.4-dev.2.abcd1234"] {
+        let repo = released_repo();
+        tag(&repo.repo, name, head(&repo.repo), false);
+        assert_official(
+            repo.command().args(["version", "--candidate", name]),
+            "v1.2.4",
+            "v1.2.3",
+        );
+    }
+    let repo = released_repo();
+    tag(&repo.repo, "1.2.4-rc.1", head(&repo.repo), false);
+    repo.command()
+        .args(["version", "--candidate", "v1.2.4-rc.1"])
+        .assert()
+        .failure()
+        .stdout("")
+        .stderr(predicate::str::contains("tag not found"));
+}
+
+#[test]
+fn explicit_candidate_is_rejected_during_prerelease_generation() {
+    for branch in ["develop", "feature/topic", "release/1.2.x", "hotfix/1.2.4"] {
+        let repo = TestRepo::new(branch);
+        tag(&repo.repo, "v1.2.3", head(&repo.repo), false);
+        tag(&repo.repo, "v1.2.4-rc.1", head(&repo.repo), false);
+        repo.command()
+            .args(["version", "--candidate", "v1.2.4-rc.1"])
+            .assert()
+            .failure()
+            .stdout("")
+            .stderr(predicate::str::contains(
+                "--candidate requires official version calculation",
+            ));
+        assert_official(
+            repo.command().args([
+                "version",
+                "--scope",
+                "release",
+                "--candidate",
+                "v1.2.4-rc.1",
+            ]),
+            "v1.2.4",
+            "v1.2.3",
+        );
+    }
+}
+
+#[test]
+fn invalid_or_missing_candidates_never_fall_back() {
+    let repo = released_repo();
+    for name in [
+        "v1.2.4-rc.invalid",
+        "v1.2.4-rc.1.extra",
+        "v1.2.4-rc.1-ignored",
+        "v1.2.4-alpha.1",
+        "v18446744073709551616.2.4-rc.1",
+        "v01.2.4-rc.1",
+    ] {
+        tag(&repo.repo, name, head(&repo.repo), false);
+    }
+    for name in [
+        "v9.0.0-rc.1",
+        "main",
+        "HEAD",
+        "v1.2.3",
+        "v1.2.3^{commit}",
+        "v1.2.4-rc.invalid",
+        "v1.2.4-rc.1.extra",
+        "v1.2.4-rc.1-ignored",
+        "v1.2.4-alpha.1",
+        "v18446744073709551616.2.4-rc.1",
+        "v01.2.4-rc.1",
+    ] {
+        repo.command()
+            .args(["version", "--candidate", name])
+            .assert()
+            .failure()
+            .stdout("")
+            .stderr(predicate::str::contains(format!(
+                "Invalid candidate '{name}'"
+            )));
+    }
+    TestRepo::new("main")
+        .command()
+        .args(["version", "--candidate", "v0.1.0-rc.1"])
+        .assert()
+        .failure()
+        .stdout("")
+        .stderr(predicate::str::contains("tag not found"));
+}
+
+#[test]
+fn candidate_must_be_newer_than_the_targets_last_official_version() {
+    let repo = released_repo();
+    for name in ["v1.2.3-rc.1", "v1.1.0-rc.9"] {
+        tag(&repo.repo, name, head(&repo.repo), false);
+        repo.command()
+            .args(["version", "--candidate", name])
+            .assert()
+            .failure()
+            .stdout("")
+            .stderr(predicate::str::contains("must be newer"));
+    }
+}
+
+#[test]
+fn candidate_cannot_reuse_an_official_version_published_on_another_branch() {
+    for published in ["v1.2.4", "1.2.4"] {
+        let repo = released_repo();
+        let base = head(&repo.repo);
+        tag(&repo.repo, "v1.2.4-rc.1", base, false);
+        let other = commit(
+            &repo.repo,
+            "release/1.2.x",
+            "fix: published elsewhere",
+            &[base],
+        );
+        tag(&repo.repo, published, other, true);
+        repo.command()
+            .args(["version", "--candidate", "v1.2.4-rc.1"])
+            .assert()
+            .failure()
+            .stdout("")
+            .stderr(predicate::str::contains(format!(
+                "already exists as tag '{published}'"
+            )));
+    }
+}
+
+#[test]
+fn candidate_must_point_to_a_commit() {
+    let repo = released_repo();
+    let blob = repo.repo.blob(b"not a commit").unwrap();
+    let object = repo.repo.find_object(blob, None).unwrap();
+    repo.repo
+        .tag_lightweight("v1.2.4-rc.1", &object, false)
+        .unwrap();
+    repo.command()
+        .args(["version", "--candidate", "v1.2.4-rc.1"])
+        .assert()
+        .failure()
+        .stdout("")
+        .stderr(predicate::str::contains("tag must point to a commit"));
+}
+
+#[test]
+fn explicit_candidate_still_requires_complete_history_for_last_version() {
+    let repo = released_repo();
+    let target = commit(&repo.repo, "main", "fix: hotfix", &[head(&repo.repo)]);
+    tag(&repo.repo, "v1.2.4-rc.1", target, false);
+    std::fs::write(repo.repo.path().join("shallow"), format!("{target}\n")).unwrap();
+    repo.command()
+        .args(["version", "--candidate", "v1.2.4-rc.1"])
+        .assert()
+        .failure()
+        .stdout("")
+        .stderr(predicate::str::contains("requires complete history"));
+}

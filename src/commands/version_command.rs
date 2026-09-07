@@ -183,49 +183,96 @@ fn explicit_official_version(
     all_tag_names: &[String],
     last_official_version: &SemanticVersion,
 ) -> Result<String, Box<dyn Error>> {
-    let invalid = |reason: String| -> Box<dyn Error> {
-        DefaultError {
-            message: format!("Invalid candidate '{candidate}': {reason}"),
-            source: None,
-        }
-        .into()
-    };
+    validate_candidate_tag_exists(candidate, all_tag_names)?;
+    let mut version = parse_candidate_prerelease(candidate)?;
+    validate_candidate_tag_commit(candidate)?;
+
+    let official = version.release();
+    validate_candidate_version_increase(candidate, &official, last_official_version)?;
+    validate_candidate_not_released(candidate, &official, all_tag_names)?;
+
+    Ok(official.to_string(true))
+}
+
+fn invalid_candidate(candidate: &str, reason: impl Into<String>) -> Box<dyn Error> {
+    DefaultError {
+        message: format!("Invalid candidate '{candidate}': {}", reason.into()),
+        source: None,
+    }
+    .into()
+}
+
+fn validate_candidate_tag_exists(
+    candidate: &str,
+    all_tag_names: &[String],
+) -> Result<(), Box<dyn Error>> {
     if !all_tag_names.iter().any(|tag| tag == candidate) {
-        return Err(invalid(
-            "tag not found; fetch the exact tag before retrying".to_string(),
+        return Err(invalid_candidate(
+            candidate,
+            "tag not found; fetch the exact tag before retrying",
         ));
     }
-    let mut version = SemanticVersion::from_string(candidate.to_string()).map_err(&invalid)?;
+    Ok(())
+}
+
+fn parse_candidate_prerelease(candidate: &str) -> Result<SemanticVersion, Box<dyn Error>> {
+    let version = SemanticVersion::from_string(candidate.to_string())
+        .map_err(|reason| invalid_candidate(candidate, reason))?;
     // The legacy parser tolerates extra fields. Explicit selection must name
     // one of the supported dev/rc formats without discarding part of the tag.
     if version.prerelease_stage.is_empty()
         || version.to_string(candidate.starts_with('v')) != candidate
     {
-        return Err(invalid(
-            "expected a valid dev or rc prerelease tag".to_string(),
+        return Err(invalid_candidate(
+            candidate,
+            "expected a valid dev or rc prerelease tag",
         ));
     }
-    git_service::tag_commit_id(&config::clone_target_path(), candidate)
-        .map_err(|error| invalid(format!("tag must point to a commit: {error}")))?;
-    let official = version.release();
+    Ok(version)
+}
+
+fn validate_candidate_tag_commit(candidate: &str) -> Result<(), Box<dyn Error>> {
+    git_service::tag_commit_id(&config::clone_target_path(), candidate).map_err(|error| {
+        invalid_candidate(candidate, format!("tag must point to a commit: {error}"))
+    })?;
+    Ok(())
+}
+
+fn validate_candidate_version_increase(
+    candidate: &str,
+    official: &SemanticVersion,
+    last_official_version: &SemanticVersion,
+) -> Result<(), Box<dyn Error>> {
     if official.cmp(last_official_version) != Ordering::Greater {
-        return Err(invalid(format!(
-            "version must be newer than the target's last official version ({})",
-            last_official_version.to_string(true)
-        )));
+        return Err(invalid_candidate(
+            candidate,
+            format!(
+                "version must be newer than the target's last official version ({})",
+                last_official_version.to_string(true)
+            ),
+        ));
     }
+    Ok(())
+}
+
+fn validate_candidate_not_released(
+    candidate: &str,
+    official: &SemanticVersion,
+    all_tag_names: &[String],
+) -> Result<(), Box<dyn Error>> {
     let official_pattern = Regex::new(SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN).unwrap();
     for tag in all_tag_names {
         if official_pattern.is_match(tag)
             && SemanticVersion::from_string(tag.clone())
-                .is_ok_and(|version| version.cmp(&official) == Ordering::Equal)
+                .is_ok_and(|version| version.cmp(official) == Ordering::Equal)
         {
-            return Err(invalid(format!(
-                "official version already exists as tag '{tag}'"
-            )));
+            return Err(invalid_candidate(
+                candidate,
+                format!("official version already exists as tag '{tag}'"),
+            ));
         }
     }
-    Ok(official.to_string(true))
+    Ok(())
 }
 
 fn upcoming_prerelease_version(

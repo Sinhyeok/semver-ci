@@ -8,6 +8,7 @@ mod http_service;
 mod pipelines;
 mod release;
 mod semantic_version;
+mod versioning_service;
 
 use dotenv::dotenv;
 

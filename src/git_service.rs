@@ -1,12 +1,8 @@
-use crate::semantic_version::SemanticVersion;
 use git2::{
     Config, Cred, CredentialType, Error, FetchOptions, ObjectType, Oid, PushOptions,
     RemoteCallbacks, Repository,
 };
-use log::error;
-use regex::Regex;
 use std::env;
-use std::ops::Not;
 use std::path::Path;
 
 pub(crate) fn tag_names(
@@ -43,10 +39,6 @@ pub(crate) fn reachable_tag_names(
     let target = repo.revparse_single(target)?.peel_to_commit()?.id();
     let mut reachable = Vec::new();
     for tag_name in tag_names {
-        // Non-version tags cannot affect version calculation.
-        if SemanticVersion::from_string(tag_name.clone()).is_err() {
-            continue;
-        }
         let commit = repo
             .find_reference(&format!("refs/tags/{tag_name}"))?
             .peel_to_commit()?
@@ -64,33 +56,6 @@ pub(crate) fn tag_commit_id(repo_path: &str, tag_name: &str) -> Result<Oid, Erro
         .find_reference(&format!("refs/tags/{tag_name}"))?
         .peel_to_commit()?;
     Ok(commit.id())
-}
-
-pub(crate) fn last_tag_by_pattern(
-    tag_names: &[String],
-    tag_pattern: &str,
-    default: Option<SemanticVersion>,
-) -> Option<SemanticVersion> {
-    let tag_regex = Regex::new(tag_pattern).unwrap();
-    let mut valid_versions: Vec<SemanticVersion> = vec![];
-
-    for tag_name in tag_names {
-        if tag_regex.is_match(tag_name).not() {
-            continue;
-        }
-
-        match SemanticVersion::from_string(tag_name.to_string()) {
-            Ok(version) => valid_versions.push(version),
-            Err(msg) => error!("{}", msg),
-        }
-    }
-
-    if valid_versions.is_empty() {
-        default
-    } else {
-        valid_versions.sort_by(|a, b| b.cmp(a));
-        Some(valid_versions[0].clone())
-    }
 }
 
 pub(crate) fn branch_name(repo_path: &str) -> Result<String, Error> {

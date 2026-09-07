@@ -195,6 +195,114 @@ fn metadata(metadata_string: &str) -> Result<(String, u64, String), String> {
 mod tests {
     use super::*;
 
+    fn parse(version: &str) -> SemanticVersion {
+        SemanticVersion::from_string(version.to_string()).unwrap()
+    }
+
+    #[test]
+    fn supported_versions_round_trip_with_and_without_prefix() {
+        for version in ["0.0.0", "12.34.56", "1.2.3-rc.10", "1.2.3-dev.7.abcd1234"] {
+            let prefixed = format!("v{version}");
+            for input in [version, prefixed.as_str()] {
+                let parsed = parse(input);
+                assert_eq!(parsed.to_string(false), version, "input: {input}");
+                assert_eq!(parsed.to_string(true), prefixed, "input: {input}");
+            }
+        }
+    }
+
+    #[test]
+    fn invalid_versions_report_the_invalid_component() {
+        for (input, expected) in [
+            ("", "Invalid version string format"),
+            ("1.2", "Invalid version string format"),
+            ("1.2.3.4", "Invalid version string format"),
+            ("x.2.3", "Invalid major version"),
+            ("1.x.3", "Invalid minor version"),
+            ("1.2.x", "Invalid patch version"),
+            ("18446744073709551616.2.3", "Invalid major version"),
+            ("1.18446744073709551616.3", "Invalid minor version"),
+            ("1.2.18446744073709551616", "Invalid patch version"),
+            ("1.2.3-", "Invalid metadata format"),
+            ("1.2.3-rc", "Invalid metadata format"),
+            ("1.2.3-rc.x", "Invalid prerelease number"),
+            ("1.2.3-rc.", "Invalid prerelease number"),
+            ("1.2.3-rc.18446744073709551616", "Invalid prerelease number"),
+        ] {
+            let error = SemanticVersion::from_string(input.to_string()).unwrap_err();
+            assert!(error.contains(expected), "input: {input}, error: {error}");
+        }
+    }
+
+    #[test]
+    fn version_components_accept_u64_max() {
+        let version = parse("18446744073709551615.18446744073709551615.18446744073709551615-rc.18446744073709551615");
+        assert_eq!(version.major, u64::MAX);
+        assert_eq!(version.minor, u64::MAX);
+        assert_eq!(version.patch, u64::MAX);
+        assert_eq!(version.prerelease_number, u64::MAX);
+    }
+
+    #[test]
+    fn ordering_uses_numeric_components_then_prerelease_precedence() {
+        for (lower, higher) in [
+            ("2.99.99", "10.0.0"),
+            ("1.2.99", "1.10.0"),
+            ("1.2.9", "1.2.10"),
+            ("1.2.3-dev.99.abcdef12", "1.2.3-rc.1"),
+            ("1.2.3-rc.2", "1.2.3-rc.10"),
+            ("1.2.3-dev.2.ffffffff", "1.2.3-dev.10.00000000"),
+            ("1.2.3-rc.99", "1.2.3"),
+            ("1.2.3", "1.2.4-dev.1.abcdef12"),
+        ] {
+            let (lower, higher) = (parse(lower), parse(higher));
+            assert_eq!(lower.cmp(&higher), Ordering::Less);
+            assert_eq!(higher.cmp(&lower), Ordering::Greater);
+            assert_eq!(lower.partial_cmp(&higher), Some(Ordering::Less));
+        }
+        let version = parse("1.2.3");
+        assert_eq!(version.cmp(&version), Ordering::Equal);
+    }
+
+    #[test]
+    fn scope_bumps_reset_lower_components_and_preserve_the_source() {
+        for (scope, expected) in [("major", "2.0.0"), ("minor", "1.3.0"), ("patch", "1.2.4")] {
+            let mut source = parse("1.2.3");
+            assert_eq!(source.increase_by_scope(scope.to_string()), parse(expected));
+            assert_eq!(source, parse("1.2.3"));
+        }
+    }
+
+    #[test]
+    fn prerelease_bump_preserves_stage_sha_and_source() {
+        let mut source = parse("1.2.3-dev.9.abcdef12");
+        assert_eq!(
+            source.increase_by_scope("prerelease".to_string()),
+            parse("1.2.3-dev.10.abcdef12")
+        );
+        assert_eq!(source, parse("1.2.3-dev.9.abcdef12"));
+    }
+
+    #[test]
+    fn release_clears_all_prerelease_fields_and_preserves_the_source() {
+        let mut source = parse("1.2.3-dev.9.abcdef12");
+        let mut released = source.release();
+        assert_eq!(released, parse("1.2.3"));
+        assert_eq!(released.release(), released);
+        assert_eq!(source, parse("1.2.3-dev.9.abcdef12"));
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid scope: invalid")]
+    fn unsupported_scope_is_rejected() {
+        parse("1.2.3").increase_by_scope("invalid".to_string());
+    }
+
+    #[test]
+    fn default_is_an_official_zero_version() {
+        assert_eq!(SemanticVersion::default(), parse("0.0.0"));
+    }
+
     #[test]
     fn parse_official_and_prerelease_versions() {
         let v = SemanticVersion::from_string("1.2.3".to_string()).unwrap();

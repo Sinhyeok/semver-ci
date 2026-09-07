@@ -331,7 +331,10 @@ builds previously produced by `debug.Dockerfile`. It builds each variant once,
 runs the container checks, and pushes the tested image. The reusable CI workflow
 runs Rust lint and tests.
 The release workflow runs only on pushes to `develop`, `main`, `release/**`, and
-`hotfix/**`. Feature pull requests run PR CI.
+`hotfix/**`. Feature pull requests run PR CI. In addition to Rust lint and tests,
+PR CI builds and checks both container variants when the PR changes Dockerfiles,
+`.dockerignore`, Cargo manifests or lockfiles, the Rust toolchain, `.cargo/`,
+workflow definitions, or `tests/container.sh`. These PR checks do not push images.
 
 ## Troubleshooting
 - Detached HEAD: Ensure a branch is checked out. In CI, the ref is fetched and checked out automatically.

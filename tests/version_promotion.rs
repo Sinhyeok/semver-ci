@@ -210,3 +210,47 @@ fn github_internal_clone_keeps_full_history_and_checks_out_the_event_commit() {
     assert!(!cloned.is_shallow());
     assert_eq!(head(&cloned), target);
 }
+
+#[test]
+fn different_versions_merged_into_target_are_ambiguous() {
+    let repo = released_repo();
+    let base = head(&repo.repo);
+    let hotfix = commit(&repo.repo, "hotfix/1.2.4", "fix: hotfix", &[base]);
+    tag(&repo.repo, "v1.2.4-rc.1", hotfix, false);
+    let future = commit(&repo.repo, "release/2.x.x", "feat: future", &[base]);
+    tag(&repo.repo, "v2.0.0-rc.1", future, true);
+    let merge = commit(&repo.repo, "main", "Merge hotfix", &[base, hotfix]);
+    commit(&repo.repo, "main", "Merge future", &[merge, future]);
+
+    repo.command()
+        .arg("version")
+        .assert()
+        .failure()
+        .stdout("")
+        .stderr(predicate::str::contains("Ambiguous official release"))
+        .stderr(predicate::str::contains("v1.2.4-rc.1"))
+        .stderr(predicate::str::contains("v2.0.0-rc.1"));
+}
+
+#[test]
+fn multiple_prereleases_of_the_same_version_are_not_ambiguous() {
+    let repo = released_repo();
+    let dev = commit(&repo.repo, "main", "feat: development", &[head(&repo.repo)]);
+    tag(&repo.repo, "v1.3.0-dev.1.abcd1234", dev, false);
+    let rc1 = commit(&repo.repo, "main", "fix: candidate one", &[dev]);
+    tag(&repo.repo, "v1.3.0-rc.1", rc1, false);
+    let rc2 = commit(&repo.repo, "main", "fix: candidate two", &[rc1]);
+    tag(&repo.repo, "1.3.0-rc.2", rc2, true);
+    assert_official(repo.command().arg("version"), "v1.3.0", "v1.2.3");
+}
+
+#[test]
+fn already_released_candidates_do_not_make_a_new_candidate_ambiguous() {
+    let repo = released_repo();
+    let base = head(&repo.repo);
+    tag(&repo.repo, "v1.1.0-rc.1", base, false);
+    tag(&repo.repo, "v1.2.3-rc.1", base, true);
+    let candidate = commit(&repo.repo, "main", "fix: hotfix", &[base]);
+    tag(&repo.repo, "v1.2.4-rc.1", candidate, false);
+    assert_official(repo.command().arg("version"), "v1.2.4", "v1.2.3");
+}

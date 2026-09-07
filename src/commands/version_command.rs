@@ -5,6 +5,7 @@ use crate::{config, git_service};
 use clap::Args;
 use regex::Regex;
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::error::Error;
 
 const DEV_PATTERN: &str = r"^(develop|feature/.*)$";
@@ -61,7 +62,7 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
     // For release (main, master)
     let (upcoming_version, last_version) = if is_official {
         (
-            upcoming_official_version(&tag_names, &last_official_tag),
+            upcoming_official_version(&tag_names, &last_official_tag)?,
             last_official_tag.to_string(true),
         )
     // For pre-release (develop, feature/*, release/*, hotfix/*)
@@ -109,33 +110,51 @@ fn prerelease_stage(branch_name: &str) -> String {
 fn upcoming_official_version(
     tag_names: &[String],
     last_official_version: &SemanticVersion,
-) -> String {
-    match git_service::last_tag_by_pattern(tag_names, SEMANTIC_VERSION_TAG_PRERELEASE_PATTERN, None)
-    {
-        Some(mut last_prerelease_tag) => match last_prerelease_tag.cmp(last_official_version) {
-            Ordering::Greater => last_prerelease_tag.release().to_string(true),
-            _ => {
-                log::warn!(
-                    "No newer pre-release after last official tag ({}). Fallback to minor bump.",
-                    last_official_version.to_string(true)
-                );
-                last_official_version
-                    .clone()
-                    .increase_by_scope("minor".to_string())
-                    .to_string(true)
-            }
-        },
-        None => {
-            log::warn!(
-                "No pre-release tags found. Fallback to minor bump from last official ({}).",
-                last_official_version.to_string(true)
-            );
-            last_official_version
-                .clone()
-                .increase_by_scope("minor".to_string())
-                .to_string(true)
+) -> Result<String, Box<dyn Error>> {
+    let pattern = Regex::new(SEMANTIC_VERSION_TAG_PRERELEASE_PATTERN).unwrap();
+    let mut candidates: BTreeMap<(u64, u64, u64), Vec<&str>> = BTreeMap::new();
+    for tag_name in tag_names {
+        if !pattern.is_match(tag_name) {
+            continue;
+        }
+        let Ok(mut version) = SemanticVersion::from_string(tag_name.clone()) else {
+            continue;
+        };
+        let version = version.release();
+        if version.cmp(last_official_version) == Ordering::Greater {
+            candidates
+                .entry((version.major, version.minor, version.patch))
+                .or_default()
+                .push(tag_name);
         }
     }
+
+    if candidates.len() > 1 {
+        let tags = candidates
+            .values()
+            .flatten()
+            .copied()
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(DefaultError {
+            message: format!(
+                "Ambiguous official release: reachable prerelease tags target multiple versions: {tags}. Select a single release candidate."
+            ),
+            source: None,
+        }.into());
+    }
+    if let Some((major, minor, patch)) = candidates.keys().next() {
+        return Ok(format!("v{major}.{minor}.{patch}"));
+    }
+
+    log::warn!(
+        "No newer reachable pre-release after last official tag ({}). Fallback to minor bump.",
+        last_official_version.to_string(true)
+    );
+    Ok(last_official_version
+        .clone()
+        .increase_by_scope("minor".to_string())
+        .to_string(true))
 }
 
 fn upcoming_prerelease_version(

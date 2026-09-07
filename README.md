@@ -199,6 +199,12 @@ and lightweight tags are supported.
 
 Unmerged release branches do not affect this calculation. For example, a merged
 `v1.2.4-rc.1` is promoted to `v1.2.4` even if an unmerged branch has `v2.0.0-rc.1`.
+Newer reachable prereleases must agree on a single `major.minor.patch` version.
+For example, `v1.2.4-rc.1` and `v1.2.4-rc.2` both produce `v1.2.4`. If candidates
+for both `v1.2.4` and `v2.0.0` are reachable, the command fails with the candidate
+tag names and prints no version outputs. It does not choose the highest version.
+Prereleases at or below the last official version do not create ambiguity.
+
 If there is no newer reachable prerelease, the existing minor bump is retained:
 `v1.2.3` becomes `v1.3.0`. With no version tags, the initial version is `v0.1.0`
 and `LAST_VERSION` is `v0.0.0`. Prerelease generation on development and release

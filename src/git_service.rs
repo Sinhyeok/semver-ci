@@ -1,13 +1,8 @@
-use crate::semantic_version::SemanticVersion;
-use git2::string_array::StringArray;
 use git2::{
     Config, Cred, CredentialType, Error, FetchOptions, ObjectType, Oid, PushOptions,
     RemoteCallbacks, Repository,
 };
-use log::error;
-use regex::Regex;
 use std::env;
-use std::ops::Not;
 use std::path::Path;
 
 pub(crate) fn tag_names(
@@ -15,41 +10,52 @@ pub(crate) fn tag_names(
     force_fetch_tags: bool,
     git_username: &str,
     git_token: &str,
-) -> Result<StringArray, Error> {
+) -> Result<Vec<String>, Error> {
     let repo = Repository::open(repo_path)?;
 
     if force_fetch_tags {
         fetch_refs(&repo, git_username, git_token, &["refs/tags/*:refs/tags/*"])?;
     }
 
-    repo.tag_names(None)
+    Ok(repo
+        .tag_names(None)?
+        .iter()
+        .flatten()
+        .map(str::to_owned)
+        .collect())
 }
 
-pub(crate) fn last_tag_by_pattern(
-    tag_names: &StringArray,
-    tag_pattern: &str,
-    default: Option<SemanticVersion>,
-) -> Option<SemanticVersion> {
-    let tag_regex = Regex::new(tag_pattern).unwrap();
-    let mut valid_versions: Vec<SemanticVersion> = vec![];
-
-    for tag_name in tag_names.iter().flatten() {
-        if tag_regex.is_match(tag_name).not() {
-            continue;
-        }
-
-        match SemanticVersion::from_string(tag_name.to_string()) {
-            Ok(version) => valid_versions.push(version),
-            Err(msg) => error!("{}", msg),
+pub(crate) fn reachable_tag_names(
+    repo_path: &str,
+    tag_names: &[String],
+    target: &str,
+) -> Result<Vec<String>, Error> {
+    let repo = Repository::open(repo_path)?;
+    if repo.is_shallow() {
+        return Err(Error::from_str(
+            "Official version calculation requires complete history. Run git fetch --unshallow --tags, or configure a full CI checkout.",
+        ));
+    }
+    let target = repo.revparse_single(target)?.peel_to_commit()?.id();
+    let mut reachable = Vec::new();
+    for tag_name in tag_names {
+        let commit = repo
+            .find_reference(&format!("refs/tags/{tag_name}"))?
+            .peel_to_commit()?
+            .id();
+        if target == commit || repo.graph_descendant_of(target, commit)? {
+            reachable.push(tag_name.clone());
         }
     }
+    Ok(reachable)
+}
 
-    if valid_versions.is_empty() {
-        default
-    } else {
-        valid_versions.sort_by(|a, b| b.cmp(a));
-        Some(valid_versions[0].clone())
-    }
+pub(crate) fn tag_commit_id(repo_path: &str, tag_name: &str) -> Result<Oid, Error> {
+    let repo = Repository::open(repo_path)?;
+    let commit = repo
+        .find_reference(&format!("refs/tags/{tag_name}"))?
+        .peel_to_commit()?;
+    Ok(commit.id())
 }
 
 pub(crate) fn branch_name(repo_path: &str) -> Result<String, Error> {

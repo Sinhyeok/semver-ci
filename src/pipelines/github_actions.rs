@@ -35,6 +35,10 @@ impl Pipeline for GithubActions {
         commit_sha[0..8].to_owned()
     }
 
+    fn target_commit(&self) -> String {
+        config::env_var("GITHUB_SHA")
+    }
+
     fn git_username(&self) -> String {
         config::env_var("GITHUB_ACTOR")
     }
@@ -94,7 +98,7 @@ impl GithubActions {
             &config::clone_target_path(),
             &self.git_username(),
             &self.git_token(),
-            20,
+            0,
         )
         .unwrap_or_else(|e| panic!("{}", e));
 
@@ -104,7 +108,7 @@ impl GithubActions {
         git_service::fetch_refs(&repo, &self.git_username(), &self.git_token(), &[&refspec])
             .unwrap_or_else(|e| panic!("Failed to fetch GITHUB_REF: {}\n{}", github_ref, e));
 
-        // Checkout GITHUB_REF
-        git_service::checkout(&repo, &github_ref).unwrap_or_else(|e| panic!("{}", e));
+        // A branch may advance after this workflow starts; use the event commit.
+        git_service::checkout(&repo, &self.target_commit()).unwrap_or_else(|e| panic!("{}", e));
     }
 }

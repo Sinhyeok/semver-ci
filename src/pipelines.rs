@@ -17,6 +17,9 @@ pub(crate) trait Pipeline {
     fn name(&self) -> String;
     fn branch_name(&self) -> String;
     fn short_commit_sha(&self) -> String;
+    fn target_commit(&self) -> String {
+        "HEAD".to_string()
+    }
     fn git_username(&self) -> String;
     fn git_email(&self) -> String;
     fn git_token(&self) -> String;

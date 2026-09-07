@@ -47,32 +47,33 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
     )
     .unwrap();
 
-    let upcoming_version;
-    let last_version;
-
     let prerelease_stage = prerelease_stage(&pipeline_info.branch_name);
     // For release (main, master)
-    if args.scope == "release" || prerelease_stage.is_empty() {
-        upcoming_version = upcoming_official_version(&tag_names, &last_official_tag);
-        last_version = last_official_tag.to_string(true);
+    let (upcoming_version, last_version) = if args.scope == "release" || prerelease_stage.is_empty()
+    {
+        (
+            upcoming_official_version(&tag_names, &last_official_tag),
+            last_official_tag.to_string(true),
+        )
     // For pre-release (develop, feature/*, release/*, hotfix/*)
     } else {
         let upcoming_official_version = last_official_tag.increase_by_scope(args.scope);
 
-        upcoming_version = upcoming_prerelease_version(
-            &tag_names,
-            prerelease_stage.clone(),
-            upcoming_official_version.clone(),
-            pipeline_info.short_commit_sha,
-        );
-
-        last_version = last_prerelease_version(
-            &tag_names,
-            prerelease_stage,
-            last_official_tag,
-            upcoming_official_version.to_string(false),
-        );
-    }
+        (
+            upcoming_prerelease_version(
+                &tag_names,
+                prerelease_stage.clone(),
+                upcoming_official_version.clone(),
+                pipeline_info.short_commit_sha,
+            ),
+            last_prerelease_version(
+                &tag_names,
+                prerelease_stage,
+                last_official_tag,
+                upcoming_official_version.to_string(false),
+            ),
+        )
+    };
 
     println!("UPCOMING_VERSION={}", upcoming_version);
     println!("LAST_VERSION={}", last_version);

@@ -152,11 +152,21 @@ docker run -v .:/app tartar4s/semver-ci tag --help
 docker pull tartar4s/semver-ci
 ```
 
+Versioned images are available for `linux/amd64` in two variants:
+
+| Tag | Base OS | Rust target |
+| --- | --- | --- |
+| `<version>`, `<version>-alpine` | Alpine | `x86_64-unknown-linux-musl` |
+| `<version>-debian` | Debian Bookworm | `x86_64-unknown-linux-gnu` |
+
+Replace `<version>` with a release tag that lists these variants in its artifacts.
+The tag without an OS suffix remains an alias for Alpine.
+
 ### Build from source
 ```shell
 git clone https://github.com/Sinhyeok/semver-ci.git
 cd semver-ci
-cargo build --release
+cargo build --locked --release
 ./target/release/svci --version
 ```
 
@@ -237,6 +247,13 @@ Options:
 brew install rustup cmake
 ```
 ### Setup Project
+The project pins Rust and Cargo to **1.98.1** in `rust-toolchain.toml`.
+Rustup installs that toolchain and the configured targets when you run Cargo.
+Local development, CI, and Docker builds all use this file.
+The Docker bootstrap image uses `rust:1.98-bookworm` to track published patch
+updates within Rust 1.98. Rustup installs and selects the project's **1.98.1**
+toolchain inside that builder.
+
 ```shell
 # Clone project
 git clone git@github.com:Sinhyeok/semver-ci.git
@@ -298,6 +315,23 @@ rustup component add clippy rustfmt
 cargo clippy
 cargo fmt
 ```
+
+### Build and test container images
+```shell
+docker build --platform linux/amd64 --build-arg VARIANT=alpine -t semver-ci:alpine .
+docker build --platform linux/amd64 --build-arg VARIANT=debian -t semver-ci:debian .
+bash tests/container.sh semver-ci:alpine alpine
+bash tests/container.sh semver-ci:debian debian
+```
+
+Local Docker builds use the release profile by default. For a debug build, add
+`--build-arg CARGO_PROFILE=dev` to either command; this replaces `debug.Dockerfile`.
+The release workflow explicitly uses `CARGO_PROFILE=dev` to preserve the debug
+builds previously produced by `debug.Dockerfile`. It builds each variant once,
+runs the container checks, and pushes the tested image. The reusable CI workflow
+runs Rust lint and tests.
+The release workflow runs only on pushes to `develop`, `main`, `release/**`, and
+`hotfix/**`. Feature pull requests run PR CI.
 
 ## Troubleshooting
 - Detached HEAD: Ensure a branch is checked out. In CI, the ref is fetched and checked out automatically.

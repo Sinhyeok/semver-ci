@@ -37,11 +37,11 @@ pub(crate) fn post(
     body: Option<HashMap<&str, Value>>,
 ) -> Result<HashMap<String, Value>, Box<dyn Error>> {
     let mut request_builder = reqwest::blocking::Client::new().post(url);
-    if headers.is_some() {
-        request_builder = request_builder.headers(headers.unwrap());
+    if let Some(headers) = headers {
+        request_builder = request_builder.headers(headers);
     }
-    if body.is_some() {
-        request_builder = request_builder.json(&body.clone().unwrap());
+    if let Some(body) = &body {
+        request_builder = request_builder.json(body);
     }
 
     info!("{:#?}", request_builder);
@@ -62,11 +62,11 @@ pub(crate) fn get(
     query: Option<HashMap<&str, &str>>,
 ) -> Result<HashMap<String, Value>, Box<dyn Error>> {
     let mut request_builder = reqwest::blocking::Client::new().get(url);
-    if headers.is_some() {
-        request_builder = request_builder.headers(headers.unwrap());
+    if let Some(headers) = headers {
+        request_builder = request_builder.headers(headers);
     }
-    if query.is_some() {
-        request_builder = request_builder.query(&query.unwrap());
+    if let Some(query) = query {
+        request_builder = request_builder.query(&query);
     }
 
     info!("{:#?}", request_builder);

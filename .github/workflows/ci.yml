@@ -1,34 +1,83 @@
 name: CI
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths-ignore:
-      - '**/README.md'
-      - '**/LICENSE'
-  workflow_dispatch:
   workflow_call:
 
-permissions:
-  contents: read
+# The caller grants PR comment permissions or read-only access for releases.
+defaults:
+  run:
+    shell: bash
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     steps:
-      - name: Check out the repo
+      - name: Check out the source to lint
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Install the toolchain from rust-toolchain.toml
         run: rustup show active-toolchain
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-      - name: Lint all targets and features
-        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+      - name: Check formatting and save suggestions
+        id: fmt
+        continue-on-error: true
+        run: |
+          cargo fmt --all
+          git diff --exit-code -- '*.rs' | tee "$RUNNER_TEMP/rustfmt.diff"
+      - name: Restore the original source before Clippy
+        run: git restore --worktree -- '*.rs'
+      - name: Lint all targets and features and save diagnostics
+        id: clippy
+        continue-on-error: true
+        run: |
+          cargo clippy --locked --all-targets --all-features --message-format short -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
+
+      # Reporting consumes the saved results and never reruns either tool.
+      # Fork PRs keep the checks but cannot post reviews with a read-only token.
+      - name: Set up reviewdog for PR comments
+        id: reviewdog
+        if: >-
+          !cancelled() && github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          steps.clippy.outcome != 'skipped'
+        continue-on-error: true
+        uses: reviewdog/action-setup@d8a7baabd7f3e8544ee4dbde3ee41d0011c3a93f # v1.5.0
+        with:
+          reviewdog_version: v0.21.0
+      - name: Comment on saved Clippy diagnostics
+        if: ${{ !cancelled() && steps.reviewdog.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          reviewdog -name=clippy -f=clippy -level=warning \
+            -reporter=github-pr-review -filter-mode=diff_context -fail-level=none \
+            < "$RUNNER_TEMP/clippy.log"
+      - name: Suggest saved formatting changes
+        if: ${{ !cancelled() && steps.reviewdog.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ -s "$RUNNER_TEMP/rustfmt.diff" ]]; then
+            reviewdog -name=rustfmt -f=diff -f.diff.strip=1 \
+              -reporter=github-pr-review -filter-mode=diff_context -fail-level=none \
+              < "$RUNNER_TEMP/rustfmt.diff"
+          fi
+      - name: Enforce the original lint results
+        if: ${{ !cancelled() }}
+        env:
+          FMT_OUTCOME: ${{ steps.fmt.outcome }}
+          CLIPPY_OUTCOME: ${{ steps.clippy.outcome }}
+        run: |
+          [[ "$FMT_OUTCOME" == success && "$CLIPPY_OUTCOME" == success ]]
 
   test:
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    permissions:
+      contents: read
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4

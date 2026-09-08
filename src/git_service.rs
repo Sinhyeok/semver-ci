@@ -33,7 +33,7 @@ pub(crate) fn reachable_tag_names(
     let repo = Repository::open(repo_path)?;
     if repo.is_shallow() {
         return Err(Error::from_str(
-            "Official version calculation requires complete history. Run git fetch --unshallow --tags, or configure a full CI checkout.",
+            "Version calculation requires complete history. Run git fetch --unshallow --tags, or configure a full CI checkout.",
         ));
     }
     let target = repo.revparse_single(target)?.peel_to_commit()?.id();

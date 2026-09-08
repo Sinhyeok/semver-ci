@@ -1,7 +1,7 @@
 use crate::branch_rules::{self, Scope, Stage};
 use crate::default_error::DefaultError;
 use crate::versioning_service::{self, VersionRequest};
-use crate::{config, git_service, pipelines};
+use crate::{config, git_service, pipelines, release_target};
 use clap::Args;
 use std::error::Error;
 
@@ -18,6 +18,10 @@ pub(crate) struct VersionCommandArgs {
     /// Promote this exact prerelease tag (official version calculation only).
     #[arg(long, env, value_name = "TAG")]
     candidate: Option<String>,
+
+    /// Exact official target version. Must agree with a version-bearing branch.
+    #[arg(long, env, value_name = "VERSION")]
+    target: Option<String>,
 }
 
 pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
@@ -31,6 +35,8 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
         args.stage,
         args.candidate.is_some(),
     )?;
+    let target =
+        release_target::resolve(&pipeline_info.branch_name, args.target.as_deref(), scope)?;
 
     let tag_names = git_service::tag_names(
         &repo_path,
@@ -52,6 +58,7 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
         scope,
         stage,
         candidate: args.candidate.as_deref(),
+        target: target.as_ref(),
         tag_names: &tag_names,
     })?;
 

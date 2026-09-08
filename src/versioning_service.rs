@@ -63,7 +63,7 @@ fn validate_upcoming_version(upcoming_version: &str, tag_names: &[String]) -> Re
     let version = upcoming_version
         .strip_prefix('v')
         .unwrap_or(upcoming_version);
-    // Compare full names: version ordering ignores dev SHAs, and parsing can
+    // Compare full names: release precedence ignores dev SHAs, and parsing can
     // discard unsupported suffixes. Only the optional v prefix is equivalent.
     if let Some(tag) = tag_names
         .iter()
@@ -157,7 +157,7 @@ fn validate_target(
     last_official: &SemanticVersion,
     all_tags: &[VersionTag],
 ) -> Result<()> {
-    if target.version.cmp(last_official) != Ordering::Greater {
+    if target.version.cmp_precedence(last_official) != Ordering::Greater {
         return Err(DefaultError::new(messages::target_not_newer(
             &target.version.to_string(true),
             &last_official.to_string(true),
@@ -307,7 +307,7 @@ fn select_official_candidate(
             continue;
         }
         let version = tag.version.release();
-        if version.cmp(last_official_version) == Ordering::Greater {
+        if version.cmp_precedence(last_official_version) == Ordering::Greater {
             candidates
                 .entry((version.major, version.minor, version.patch))
                 .or_default()
@@ -356,7 +356,7 @@ fn promote_explicit_candidate(
         .context(messages::invalid_candidate(candidate))?;
 
     let official = version.release();
-    if official.cmp(last_official_version) != Ordering::Greater {
+    if official.cmp_precedence(last_official_version) != Ordering::Greater {
         return Err(invalid_candidate(
             candidate,
             messages::candidate_not_newer(&last_official_version.to_string(true)),
@@ -390,6 +390,12 @@ fn latest_version<'a>(
 ) -> Option<SemanticVersion> {
     // Preserve the first tag when precedence is equal, including different dev SHAs.
     versions
-        .reduce(|latest, version| if version > latest { version } else { latest })
+        .reduce(|latest, version| {
+            if version.cmp_precedence(latest) == Ordering::Greater {
+                version
+            } else {
+                latest
+            }
+        })
         .cloned()
 }

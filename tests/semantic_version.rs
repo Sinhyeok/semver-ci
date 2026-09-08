@@ -10,6 +10,7 @@ mod semantic_version;
 
 use semantic_version::SemanticVersion;
 use std::cmp::Ordering;
+use std::collections::{BTreeMap, BTreeSet};
 
 fn parse(version: &str) -> SemanticVersion {
     SemanticVersion::from_string(version.to_string()).unwrap()
@@ -80,9 +81,97 @@ fn ordering_uses_numeric_components_then_prerelease_precedence() {
         assert_eq!(lower.cmp(&higher), Ordering::Less);
         assert_eq!(higher.cmp(&lower), Ordering::Greater);
         assert_eq!(lower.partial_cmp(&higher), Some(Ordering::Less));
+        assert_eq!(lower.cmp_precedence(&higher), Ordering::Less);
+        assert_eq!(higher.cmp_precedence(&lower), Ordering::Greater);
     }
     let version = parse("1.2.3");
     assert_eq!(version.cmp(&version), Ordering::Equal);
+    assert_eq!(version.cmp_precedence(&version), Ordering::Equal);
+}
+
+#[test]
+fn different_dev_shas_have_equal_precedence_but_distinct_identity_and_order() {
+    let a = parse("1.2.3-dev.1.aaaaaaaa");
+    let b = parse("1.2.3-dev.1.bbbbbbbb");
+    assert_ne!(a, b);
+    assert_eq!(a.cmp(&b), Ordering::Less);
+    assert_eq!(b.cmp(&a), Ordering::Greater);
+    assert_eq!(a.cmp_precedence(&b), Ordering::Equal);
+    assert_eq!(b.cmp_precedence(&a), Ordering::Equal);
+}
+
+#[test]
+fn ordering_obeys_comparison_laws_for_supported_versions() {
+    let mut versions: Vec<_> = [
+        "0.0.0",
+        "1.2.3-dev.1.aaaaaaaa",
+        "v1.2.3-dev.1.aaaaaaaa",
+        "1.2.3-dev.1.bbbbbbbb",
+        "1.2.3-dev.2.00000000",
+        "1.2.3-dev.10.ffffffff",
+        "1.2.3-rc.1",
+        "v1.2.3-rc.1",
+        "1.2.3-rc.2",
+        "1.2.3-rc.10",
+        "1.2.3",
+        "v1.2.3",
+        "1.2.4-dev.1.aaaaaaaa",
+        "1.3.0",
+        "2.0.0",
+        "18446744073709551615.0.0",
+    ]
+    .into_iter()
+    .map(parse)
+    .collect();
+    // Prerelease calculation also stores a SHA on RC values before formatting.
+    let mut rc = parse("1.2.3-rc.1");
+    rc.commit_short_sha = "aaaaaaaa".to_string();
+    versions.push(rc);
+
+    for a in &versions {
+        for b in &versions {
+            let ordering = a.cmp(b);
+            assert_eq!(ordering == Ordering::Equal, a == b, "{a:?}, {b:?}");
+            assert_eq!(ordering, b.cmp(a).reverse(), "{a:?}, {b:?}");
+            assert_eq!(a.partial_cmp(b), Some(ordering), "{a:?}, {b:?}");
+            for c in &versions {
+                if a <= b && b <= c {
+                    assert!(a <= c, "{a:?}, {b:?}, {c:?}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn ordered_collections_preserve_distinct_versions_and_deduplicate_identical_ones() {
+    let names = [
+        "1.2.3-dev.1.aaaaaaaa",
+        "1.2.3-dev.1.bbbbbbbb",
+        "1.2.3-rc.1",
+        "1.2.3",
+    ];
+    let mut set = BTreeSet::new();
+    let mut map = BTreeMap::new();
+    for (index, name) in names.iter().enumerate() {
+        assert!(set.insert(parse(name)), "{name}");
+        assert_eq!(map.insert(parse(name), index), None, "{name}");
+    }
+    assert_eq!(set.len(), names.len());
+    assert_eq!(map.len(), names.len());
+    assert!(!set.contains(&parse("1.2.3-dev.1.cccccccc")));
+    assert_eq!(map.get(&parse("1.2.3-dev.1.cccccccc")), None);
+
+    for (index, name) in names.iter().enumerate() {
+        let identical = parse(&format!("v{name}"));
+        assert!(set.contains(&identical));
+        assert!(!set.insert(identical.clone()));
+        assert_eq!(map.insert(identical.clone(), index + 10), Some(index));
+        assert_eq!(map.get(&identical), Some(&(index + 10)));
+    }
+    let expected: Vec<_> = names.into_iter().map(parse).collect();
+    assert_eq!(set.into_iter().collect::<Vec<_>>(), expected);
+    assert_eq!(map.into_keys().collect::<Vec<_>>(), expected);
 }
 
 #[test]

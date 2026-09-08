@@ -401,6 +401,9 @@ svci release -g -p v1.2.3 v1.3.0
 
 # Use a display name distinct from the tag
 svci release --tag-name v1.3.0 "Version 1.3.0"
+
+# Use 1.3.0 for both the release name and tag
+svci release --strip-prefix-v v1.3.0
 ```
 
 | Option | Environment variable | Behavior / default |
@@ -410,11 +413,10 @@ svci release --tag-name v1.3.0 "Version 1.3.0"
 | `--tag-message <TAG_MESSAGE>` | `TAG_MESSAGE` | Message for creating an annotated tag in GitLab; empty by default. Ignored by GitHub. |
 | `-g`, `--generate-release-notes` | `GENERATE_RELEASE_NOTES` | Generate notes and prepend any description; `false` by default. |
 | `-p`, `--previous-tag <PREVIOUS_TAG>` | `PREVIOUS_TAG` | GitLab comparison base for generated notes; empty by default. Pass `v0.0.0` for an initial release. |
-| `-s`, `--strip-prefix-v` | `STRIP_PREFIX_V` | Accepted but currently has no effect; `false` by default ([#56](https://github.com/Sinhyeok/semver-ci/issues/56)). |
+| `-s`, `--strip-prefix-v` | `STRIP_PREFIX_V` | Remove one leading lowercase `v` from the release name and tag name; `false` by default. |
 
 There is no draft option. GitHub releases are not automatically marked as
 prereleases for dev or RC tags ([#57](https://github.com/Sinhyeok/semver-ci/issues/57)).
-To omit a `v` prefix, supply the desired name and tag directly.
 
 ### tag
 

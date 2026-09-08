@@ -70,6 +70,7 @@ impl Pipeline for GithubActions {
         body.insert("name", json!(release.name.clone()));
         body.insert("body", json!(release.description.clone()));
         body.insert("tag_name", json!(release.tag_name.clone()));
+        body.insert("prerelease", json!(release.is_prerelease()));
         body.insert("target_commitish", json!(config::env_var("GITHUB_SHA")));
         body.insert(
             "generate_release_notes",

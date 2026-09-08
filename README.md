@@ -165,7 +165,8 @@ cargo build --locked --release
 ### Scope and stage
 
 **Scope** chooses how the core version changes: `major`, `minor`, and `patch`
-increment an official version; `release` promotes a prerelease candidate.
+increment an official version or select the base release line for an exact target;
+`release` promotes a prerelease candidate.
 **Stage** chooses the version format: `dev`, `rc`, or `stable`.
 Scope `release` requires stage `stable`.
 
@@ -186,17 +187,63 @@ These examples assume a previous official version of `v1.2.3` and no prerelease 
 | `hotfix/1.2.4` | patch | rc | `vX.Y.Z-rc.N` | `v1.2.4-rc.1` |
 | `main`, `master` | release | stable | `vX.Y.Z` | `v1.3.0` |
 
-Version-bearing branch names select a bump scope, not a maintenance release
-line. For example, `release/1.2.x` also selects `minor`; it does not pin the result
-to `1.2`. See [custom branch patterns](#custom-branch-patterns) for the exact rules.
+### Exact release targets and maintenance branches
+
+Version-bearing branches select an exact target as well as scope and stage:
+
+| Branch | Target | Previous official version |
+| --- | --- | --- |
+| `hotfix/M.m.p` | `M.m.p` (`p > 0`) | Highest reachable official version with the same major and minor. |
+| `release/M.m.x` | `M.m.0` (`m > 0`) | Highest reachable official version with the same major. |
+| `release/M.x.x` | `M.0.0` (`M > 0`) | Highest reachable official version. |
+
+Reachable means tagged at the target commit or one of its ancestors. The commit
+is local `HEAD`, `GITHUB_SHA` in GitHub Actions, or `CI_COMMIT_SHA` in GitLab CI.
+All targets must be newer than the selected previous official version and must
+not already have an official tag anywhere in the repository, with or without `v`.
+These constraints apply to dev, RC, stable bumps, and candidate promotion.
+
+For example, `hotfix/1.2.4` branched from `v1.2.3` produces `v1.2.4-rc.1` and
+`LAST_VERSION=v1.2.3` even if a separate branch has already released `v2.0.0`.
+`release/1.3.x` targets `1.3.0`, using the previous reachable `1.*` official
+version; it fails after `1.3.0` has been published. Use `hotfix/1.3.1` for the next
+patch release. Targets may skip numbers: `hotfix/1.2.9` can start from `v1.2.3`.
+
+When no official tag is reachable, `v0.0.0` can serve as the base only if it fits
+the scope's release line, such as `hotfix/0.0.1`, `release/0.1.x`, or `release/1.x.x`.
+A missing base for `hotfix/1.2.4` or `release/1.3.x` is an error. Fetch complete
+history and tags and check where the branch was created.
+
+Use `--target X.Y.Z` or `TARGET` for an exact target on a custom branch. A leading
+`v` is accepted. Scope and stage still follow their usual option/pattern rules:
+
+```shell
+# On a custom branch: prepare or directly calculate the 1.2.4 maintenance release
+svci version --scope patch --stage rc --target 1.2.4
+svci version --scope patch --stage stable --target 1.2.4
+```
+
+A target with nonzero patch requires scope `patch`; a target ending in `.0` with
+nonzero minor requires `minor`; a target ending in `.0.0` requires `major`.
+Scope `release` is also supported for stable candidate promotion. Conflicting
+scope values from flags, environment variables, or custom patterns fail. An
+explicit target must match a version-bearing branch's target. For example,
+`release/2.x.x --scope patch` and `hotfix/1.2.4 --target 1.2.5` are errors.
+
+The `release/` and `hotfix/` prefixes require the supported target formats above,
+with decimal components, no leading zeroes, and no `v` prefix. Custom regexes and
+explicit options cannot bypass this validation in `version`.
 
 ### Dev and RC versions
 
-Prerelease calculation starts from the highest official tag at the target commit
-or one of its ancestors. The target is local `HEAD`, `GITHUB_SHA` in GitHub Actions,
-or `CI_COMMIT_SHA` in GitLab CI. It applies the resolved bump scope, then increments
-the highest reachable prerelease number for that core version and stage. Tags
-outside the target's history do not affect the version or prerelease number.
+With an exact target, prerelease calculation uses that core version and the
+previous official version selected from its release line and commit history.
+Without a target, it applies the scope bump to the highest official tag at the
+target commit or one of its ancestors. The target commit is local `HEAD`,
+`GITHUB_SHA` in GitHub Actions, or `CI_COMMIT_SHA` in GitLab CI.
+
+The highest reachable prerelease number for the exact core version and stage is
+incremented. Tags outside the target's history do not affect the prerelease number.
 The number starts at `1` when no matching reachable prerelease exists.
 Dev versions also include the target commit's short SHA.
 
@@ -206,17 +253,17 @@ is merged into `develop`, it calculates `v2.1.0-dev.N.SHA`.
 
 For example, with official `v1.2.3` and candidate `v1.3.0-rc.2`, scope `minor`
 and stage `rc` produce `v1.3.0-rc.3`. Dev and RC counters are independent.
-With no reachable official tags, the base is `v0.0.0`.
+Without an exact target and with no reachable official tags, the base is `v0.0.0`.
 
 ### Stable versions and promotion
 
-Stable calculation selects the highest official tag at the target commit or
+Without an exact target, stable calculation selects the highest official tag at the target commit or
 one of its ancestors. The target is local `HEAD`, `GITHUB_SHA` in GitHub Actions,
 or `CI_COMMIT_SHA` in GitLab CI. Annotated and lightweight tags are supported.
 Complete commit history and available version tags are required; see
 [shallow clones and missing tags](#shallow-clones-and-missing-tags).
 
-The resolved scope determines the next version:
+Without an exact target, the resolved scope determines the next version:
 
 | Scope | Behavior | Example from `v1.2.3` |
 | --- | --- | --- |
@@ -228,6 +275,12 @@ Automatic promotion ignores unmerged candidates and prereleases at or below the
 previous official version. If newer reachable candidates target different core
 versions, such as `v1.2.4` and `v2.0.0`, calculation fails and lists the candidates.
 Use explicit selection to choose one.
+
+With an exact target, bump scopes produce that target directly. Scope `release`
+promotes only a reachable prerelease with the matching core version. If none
+exists, calculation fails; it does not fall back to a minor bump. Use
+`--candidate` to select a matching tag outside the commit's history, or the
+target's bump scope with `--stage stable` to calculate it directly.
 
 ### Explicit candidate selection
 
@@ -249,6 +302,7 @@ The candidate must:
 - Use `X.Y.Z-rc.N` or `X.Y.Z-dev.N.SHA`, optionally prefixed with `v`.
 - Have a core version newer than the target's previous official version.
 - Have no corresponding official tag anywhere in the repository, with or without `v`.
+- Match the branch or explicit target when one is selected.
 
 The candidate can be outside the target's ancestry. Explicit selection associates
 it with the target release without verifying equivalent source changes or build
@@ -268,7 +322,7 @@ LAST_VERSION=v1.3.0-rc.2
 | Output | Dev / RC | Stable |
 | --- | --- | --- |
 | `UPCOMING_VERSION` | The next prerelease for the resolved scope and stage. | The bumped or promoted official version. |
-| `LAST_VERSION` | The highest reachable prerelease for the calculated core version and stage, or the highest reachable official version if none matches. | The highest official version in the target's history. |
+| `LAST_VERSION` | The highest reachable prerelease for the calculated core version and stage, or the selected previous official version if none matches. | The selected previous official version from the commit's history and, when specified, the release line. |
 
 When no previous version applies, `LAST_VERSION` is `v0.0.0`.
 Diagnostics go to standard error, so CI jobs can capture standard output directly.
@@ -280,6 +334,9 @@ Diagnostics go to standard error, so CI jobs can capture standard output directl
 For each option, the command-line value takes precedence over its environment
 variable. For scope and stage, an omitted value is then inferred from branch
 rules. Only missing values require matching rules.
+
+`--target` takes precedence over `TARGET`. A target inferred from the branch is
+always a constraint: explicit target and scope values must agree with it.
 
 An explicit `--scope release` or `SCOPE=release` defaults an omitted stage to
 `stable` on any named branch for compatibility. An explicit candidate defaults
@@ -324,6 +381,8 @@ rules are checked in `MAJOR`, `MINOR`, `PATCH`, `RELEASE` order; stage rules in
 overrides: `RELEASE` configures scope, and `STABLE` configures stage.
 The legacy scope regex syntax and precedence are preserved. Invalid patterns
 in a group needed for inference cause an error, even if an earlier rule matches.
+These patterns select scope/stage only; target parsing and validation are
+independent. Custom branches outside `release/` and `hotfix/` can use `--target`.
 
 ```shell
 # On integration: scope=minor, stage=dev
@@ -392,6 +451,7 @@ svci version --stage stable --candidate v1.2.4-rc.1
 | `-s`, `--scope <SCOPE>` | `SCOPE` | `major`, `minor`, `patch`, or `release`; inferred when omitted. |
 | `--stage <STAGE>` | `STAGE` | `dev`, `rc`, or `stable`; inferred when omitted. |
 | `--candidate <TAG>` | `CANDIDATE` | Promote the exact tag; unset by default. Requires stable calculation. |
+| `--target <VERSION>` | `TARGET` | Exact official core version, optionally prefixed with `v`; inferred from supported release/hotfix branch names when omitted. |
 
 ### release
 
@@ -483,9 +543,15 @@ stable calculation and cannot be combined with an explicit bump scope.
 Invalid option values or patterns needed for inference cause an error without
 version outputs.
 
+Version-bearing branches must use the supported [target formats](#exact-release-targets-and-maintenance-branches).
+Conflicting scope, target, or candidate values are errors, including explicit
+overrides. Published targets, a target at or below the previous official version
+in its line, and missing bases also fail without version outputs.
+
 ### Shallow clones and missing tags
 
-All version calculation requires full history. Use `GIT_DEPTH: "0"` in GitLab CI or
+All version calculation requires full history.
+Use `GIT_DEPTH: "0"` in GitLab CI or
 `fetch-depth: 0` with `actions/checkout`. Semver-CI's internal GitHub Actions clone
 fetches full history when it creates the checkout itself.
 
@@ -496,15 +562,16 @@ git fetch --unshallow --tags
 ```
 
 For a complete local clone with stale tags, run `git fetch --tags` or set
-`FORCE_FETCH_TAGS=true`. All version tags must be available when checking whether
-an explicit candidate has already been released.
+`FORCE_FETCH_TAGS=true`. All version tags must be available to select prerelease
+numbers and check whether an explicit candidate or target has already been released.
 
 ### Multiple candidates, squash merges, and rebases
 
 When automatic promotion reports multiple core versions, pass the intended tag
 with [`--candidate`](#explicit-candidate-selection). Normal merges and fast-forwards
 preserve candidate ancestry; squash merges and rebases can remove it. If no newer
-candidate remains reachable, automatic promotion falls back to a minor bump.
+candidate remains reachable, automatic promotion without an exact target falls
+back to a minor bump. With an exact target, a missing matching candidate is an error.
 Pass a candidate explicitly when the pipeline must promote a particular RC.
 
 ### Detached HEAD

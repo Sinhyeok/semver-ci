@@ -171,6 +171,45 @@ fn both_ci_providers_infer_policy_from_the_ci_branch_without_scope_command() {
 }
 
 #[test]
+fn ci_uses_the_event_history_and_branch_target_for_prereleases_and_stable_bumps() {
+    for github in [false, true] {
+        let repo = released_repo();
+        let base = head(&repo.repo);
+        let target = commit(&repo.repo, "main", "maintenance event", &[base]);
+        tag(&repo.repo, "v1.2.4-rc.2", target, true);
+        let newer = commit(&repo.repo, "main", "newer checkout", &[target]);
+        tag(&repo.repo, "v1.2.9", newer, false);
+        let future = commit(&repo.repo, "release/2.x.x", "separate major", &[base]);
+        tag(&repo.repo, "v2.0.0", future, true);
+        repo.repo
+            .remote("origin", repo.repo.path().to_str().unwrap())
+            .unwrap();
+        let branch_variable = if github {
+            "GITHUB_REF_NAME"
+        } else {
+            "CI_COMMIT_REF_NAME"
+        };
+        assert_official(
+            ci_command(&repo, github, &target.to_string()).env(branch_variable, "hotfix/1.2.4"),
+            "v1.2.4-rc.3",
+            "v1.2.4-rc.2",
+        );
+        assert_official(
+            ci_command(&repo, github, &target.to_string())
+                .env(branch_variable, "hotfix/1.2.4")
+                .args(["--stage", "stable"]),
+            "v1.2.4",
+            "v1.2.3",
+        );
+        ci_command(&repo, github, "0000000000000000000000000000000000000001")
+            .env(branch_variable, "hotfix/1.2.4")
+            .assert()
+            .failure()
+            .stdout("");
+    }
+}
+
+#[test]
 fn stable_bump_uses_the_targets_official_history_without_promoting_candidates() {
     let repo = released_repo();
     let base = head(&repo.repo);
@@ -400,12 +439,17 @@ fn explicit_candidate_accepts_supported_formats_and_requires_an_exact_name() {
 
 #[test]
 fn explicit_candidate_is_rejected_during_prerelease_generation() {
-    for branch in ["develop", "feature/topic", "release/1.2.x", "hotfix/1.2.4"] {
+    for (branch, candidate, official) in [
+        ("develop", "v1.2.4-rc.1", "v1.2.4"),
+        ("feature/topic", "v1.2.4-rc.1", "v1.2.4"),
+        ("release/1.3.x", "v1.3.0-rc.1", "v1.3.0"),
+        ("hotfix/1.2.4", "v1.2.4-rc.1", "v1.2.4"),
+    ] {
         let repo = TestRepo::new(branch);
         tag(&repo.repo, "v1.2.3", head(&repo.repo), false);
-        tag(&repo.repo, "v1.2.4-rc.1", head(&repo.repo), false);
+        tag(&repo.repo, candidate, head(&repo.repo), false);
         repo.command()
-            .args(["version", "--candidate", "v1.2.4-rc.1"])
+            .args(["version", "--candidate", candidate])
             .assert()
             .failure()
             .stdout("")
@@ -413,14 +457,9 @@ fn explicit_candidate_is_rejected_during_prerelease_generation() {
                 "--candidate requires official version calculation",
             ));
         assert_official(
-            repo.command().args([
-                "version",
-                "--scope",
-                "release",
-                "--candidate",
-                "v1.2.4-rc.1",
-            ]),
-            "v1.2.4",
+            repo.command()
+                .args(["version", "--scope", "release", "--candidate", candidate]),
+            official,
             "v1.2.3",
         );
     }

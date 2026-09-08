@@ -8,6 +8,7 @@ mod git_service;
 mod http_service;
 mod pipelines;
 mod release;
+mod release_target;
 mod semantic_version;
 mod versioning_service;
 

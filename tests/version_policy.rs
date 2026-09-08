@@ -78,7 +78,7 @@ fn only_the_missing_value_is_inferred_from_the_branch() {
 
 #[test]
 fn cli_overrides_environment_which_overrides_branch_rules_for_each_value() {
-    let repo = repo_with_tags("release/2.x.x", &["v1.2.3"]);
+    let repo = repo_with_tags("develop", &["v1.2.3"]);
     for (args, version) in [
         (vec![], "v1.2.4-rc.1"),
         (vec!["--scope", "minor"], "v1.3.0-rc.1"),

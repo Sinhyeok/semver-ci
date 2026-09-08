@@ -415,8 +415,14 @@ svci release --strip-prefix-v v1.3.0
 | `-p`, `--previous-tag <PREVIOUS_TAG>` | `PREVIOUS_TAG` | GitLab comparison base for generated notes; empty by default. Pass `v0.0.0` for an initial release. |
 | `-s`, `--strip-prefix-v` | `STRIP_PREFIX_V` | Remove one leading lowercase `v` from the release name and tag name; `false` by default. |
 
-There is no draft option. GitHub releases are not automatically marked as
-prereleases for dev or RC tags ([#57](https://github.com/Sinhyeok/semver-ci/issues/57)).
+GitHub requests explicitly set `prerelease` from the final tag name, after
+`--tag-name` / `TAG_NAME` selection and any `--strip-prefix-v` processing.
+Tags in the supported `X.Y.Z-rc.N` or `X.Y.Z-dev.N.SHA` format, optionally
+prefixed with one lowercase `v`, use `prerelease: true`. The entire tag must
+match the supported format, and dev tags require a nonempty SHA. Official
+versions and all other tags, including custom or malformed version tags, use
+`prerelease: false` and are still submitted. The display name does not affect
+this decision. There is no prerelease override or draft option.
 
 ### tag
 

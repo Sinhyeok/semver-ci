@@ -205,3 +205,85 @@ fn release_flag_overrides_environment_and_preserves_other_fields() {
         }
     }
 }
+
+#[test]
+fn release_sets_prerelease_for_supported_github_version_tags() {
+    for provider in PROVIDERS {
+        for (version, expected) in [
+            ("1.2.3", false),
+            ("1.2.3-rc.1", true),
+            ("1.2.3-dev.2.abcd1234", true),
+        ] {
+            for tag in [version.to_string(), format!("v{version}")] {
+                let body = release_request(provider, &[&tag], &[]);
+                assert_eq!(body["tag_name"], tag);
+                match provider {
+                    Provider::GitHub => {
+                        assert_eq!(body["prerelease"], expected, "{tag}");
+                        assert_eq!(body["generate_release_notes"], false);
+                    }
+                    Provider::GitLab => assert!(body.get("prerelease").is_none()),
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn github_release_classifies_tag_instead_of_display_name() {
+    for (name, tag, expected) in [
+        ("September release", "v1.2.3-rc.1", true),
+        ("v1.2.3", "1.2.3-dev.2.abcd1234", true),
+        ("v1.2.3-rc.1", "v1.2.3", false),
+    ] {
+        let body = release_request(Provider::GitHub, &["-g", "--tag-name", tag, name], &[]);
+        assert_eq!(body["name"], name);
+        assert_eq!(body["tag_name"], tag);
+        assert_eq!(body["prerelease"], expected, "{name}: {tag}");
+        assert_eq!(body["generate_release_notes"], true);
+    }
+}
+
+#[test]
+fn github_release_classifies_tag_after_environment_and_prefix_resolution() {
+    let environment = [("TAG_NAME", "v1.2.3-rc.1"), ("STRIP_PREFIX_V", "true")];
+    let body = release_request(Provider::GitHub, &["Version 1.2.3"], &environment);
+    assert_eq!(body["tag_name"], "1.2.3-rc.1");
+    assert_eq!(body["prerelease"], true);
+
+    let body = release_request(
+        Provider::GitHub,
+        &["--tag-name", "v1.2.3", "Version 1.2.3"],
+        &environment,
+    );
+    assert_eq!(body["tag_name"], "1.2.3");
+    assert_eq!(body["prerelease"], false);
+
+    let body = release_request(Provider::GitHub, &["--strip-prefix-v", "vv1.2.3-rc.1"], &[]);
+    assert_eq!(body["tag_name"], "v1.2.3-rc.1");
+    assert_eq!(body["prerelease"], true);
+}
+
+#[test]
+fn github_release_preserves_other_tags_as_full_releases() {
+    for tag in [
+        "nightly-build",
+        "preview-v1.2.3-rc.1",
+        "v1.2.3-alpha.1",
+        "V1.2.3-rc.1",
+        "vv1.2.3-rc.1",
+        "v1.2.3-rc",
+        "v1.2.3-rc.x",
+        "v1.2.3-rc.01",
+        "v1.2.3-rc.1.extra",
+        "v1.2.3-rc.1-extra",
+        "v1.2.3-dev.2",
+        "v1.2.3-dev.2.",
+        "v1.2.3-dev.2.abcd1234.extra",
+    ] {
+        let body = release_request(Provider::GitHub, &[tag], &[]);
+        assert_eq!(body["name"], tag);
+        assert_eq!(body["tag_name"], tag);
+        assert_eq!(body["prerelease"], false, "{tag}");
+    }
+}

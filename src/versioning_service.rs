@@ -10,6 +10,7 @@ use std::error::Error;
 
 const SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+)$";
 const SEMANTIC_VERSION_TAG_PRERELEASE_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+-.+)$";
+const PRERELEASE_SELECTION_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+)-(dev|rc)\.[0-9]+.*$";
 
 #[derive(PartialEq, Eq)]
 enum TagKind {
@@ -94,7 +95,18 @@ fn calculate_prerelease(
 ) -> VersionResult {
     let stage = request.stage.as_str();
     let mut upcoming_core = resolve_next_core(last_official, request.target, request.scope);
-    let latest_prerelease = latest_prerelease(reachable_tags, &upcoming_core, request.stage);
+    let core = upcoming_core.to_string(false);
+    let pattern = Regex::new(PRERELEASE_SELECTION_PATTERN).unwrap();
+    let latest_prerelease = latest_version(
+        reachable_tags
+            .iter()
+            .filter(|tag| {
+                pattern
+                    .captures(&tag.name)
+                    .is_some_and(|captures| &captures[1] == core.as_str() && &captures[2] == stage)
+            })
+            .map(|tag| &tag.version),
+    );
     let last_version = latest_prerelease
         .as_ref()
         .unwrap_or(last_official)
@@ -375,25 +387,6 @@ fn find_published_official<'a>(
         .iter()
         .find(|tag| tag.kind == TagKind::Official && tag.version == *official)
         .map(|tag| tag.name.as_str())
-}
-
-fn latest_prerelease(
-    reachable_tags: &[&VersionTag],
-    core: &SemanticVersion,
-    stage: Stage,
-) -> Option<SemanticVersion> {
-    let pattern = Regex::new(&format!(
-        r"^v?{}-{}\.[0-9]+.*$",
-        regex::escape(&core.to_string(false)),
-        stage.as_str()
-    ))
-    .unwrap();
-    latest_version(
-        reachable_tags
-            .iter()
-            .filter(|tag| pattern.is_match(&tag.name))
-            .map(|tag| &tag.version),
-    )
 }
 
 fn latest_version<'a>(

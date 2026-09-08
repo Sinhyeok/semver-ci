@@ -1,3 +1,4 @@
+use crate::branch_rules::{Scope, Stage};
 use crate::default_error::DefaultError;
 use crate::git_service;
 use crate::semantic_version::SemanticVersion;
@@ -7,8 +8,6 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::error::Error;
 
-const DEV_PATTERN: &str = r"^(develop|feature/.*)$";
-const RELEASE_CANDIDATE_PATTERN: &str = r"^(release|hotfix)/.*$";
 const SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+)$";
 const SEMANTIC_VERSION_TAG_PRERELEASE_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+-.+)$";
 
@@ -17,10 +16,10 @@ type OfficialVersionCandidates<'a> = BTreeMap<(u64, u64, u64), Vec<&'a str>>;
 /// Inputs for version selection, independent of CLI arguments and pipeline types.
 pub(crate) struct VersionRequest<'a> {
     pub repo_path: &'a str,
-    pub branch_name: &'a str,
     pub target_commit: &'a str,
     pub short_commit_sha: &'a str,
-    pub scope: &'a str,
+    pub scope: Scope,
+    pub stage: Stage,
     pub candidate: Option<&'a str>,
     pub tag_names: &'a [String],
 }
@@ -31,15 +30,7 @@ pub(crate) struct VersionResult {
 }
 
 pub(crate) fn calculate(request: VersionRequest<'_>) -> Result<VersionResult, Box<dyn Error>> {
-    let stage = prerelease_stage(request.branch_name);
-    let is_official = request.scope == "release" || stage.is_empty();
-    if request.candidate.is_some() && !is_official {
-        return Err(DefaultError {
-            message: "--candidate requires official version calculation; use --scope release on this branch.".to_string(),
-            source: None,
-        }.into());
-    }
-
+    let is_official = request.stage == Stage::Stable;
     let tag_names = select_version_tags(&request, is_official)?;
     let mut last_official = last_tag_by_pattern(
         &tag_names,
@@ -56,15 +47,20 @@ pub(crate) fn calculate(request: VersionRequest<'_>) -> Result<VersionResult, Bo
                 request.tag_names,
                 &last_official,
             )?
-        } else {
+        } else if request.scope == Scope::Release {
             upcoming_official_version(&tag_names, &last_official)?
+        } else {
+            last_official
+                .increase_by_scope(request.scope.as_str().to_string())
+                .to_string(true)
         };
         Ok(VersionResult {
             upcoming_version,
             last_version: last_official.to_string(true),
         })
     } else {
-        let upcoming_official = last_official.increase_by_scope(request.scope.to_string());
+        let stage = request.stage.as_str().to_string();
+        let upcoming_official = last_official.increase_by_scope(request.scope.as_str().to_string());
         Ok(VersionResult {
             upcoming_version: upcoming_prerelease_version(
                 &tag_names,
@@ -90,13 +86,14 @@ fn select_version_tags(
         return Ok(request.tag_names.to_vec());
     }
 
-    // Explicit promotion derives LAST_VERSION from target history without
-    // inferring a candidate from ancestry. Ignore non-version tags before Git lookup.
+    // Only automatic promotion needs candidate ancestry. Explicit promotion and
+    // stable bumps use target history to select the previous official version.
+    let infer_candidate = request.scope == Scope::Release && request.candidate.is_none();
     let official_pattern = Regex::new(SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN).unwrap();
     let selection_tags: Vec<_> = request
         .tag_names
         .iter()
-        .filter(|tag| request.candidate.is_none() || official_pattern.is_match(tag))
+        .filter(|tag| infer_candidate || official_pattern.is_match(tag))
         .filter(|tag| SemanticVersion::from_string((*tag).clone()).is_ok())
         .cloned()
         .collect();
@@ -105,22 +102,6 @@ fn select_version_tags(
         &selection_tags,
         request.target_commit,
     )?)
-}
-
-fn prerelease_stage(branch_name: &str) -> String {
-    let dev_regex = Regex::new(DEV_PATTERN).unwrap_or_else(|e| panic!("{}", e));
-    let release_candidate_regex =
-        Regex::new(RELEASE_CANDIDATE_PATTERN).unwrap_or_else(|e| panic!("{}", e));
-
-    let stage = if dev_regex.is_match(branch_name) {
-        "dev"
-    } else if release_candidate_regex.is_match(branch_name) {
-        "rc"
-    } else {
-        ""
-    };
-
-    stage.to_string()
 }
 
 fn upcoming_official_version(

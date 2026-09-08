@@ -79,6 +79,47 @@ fn scope_flag_overrides_environment_pattern() {
 }
 
 #[test]
+fn scope_release_pattern_ignores_stable_and_keeps_legacy_overrides() {
+    let repo = TestRepo::new("production");
+    repo.command()
+        .env("STABLE", "^production$")
+        .arg("scope")
+        .assert()
+        .failure()
+        .stdout("")
+        .stderr(predicate::str::contains("Unknown branch name: production"));
+    repo.command()
+        .env("STABLE", "^production$")
+        .env("RELEASE", "^other$")
+        .arg("scope")
+        .assert()
+        .failure()
+        .stdout("")
+        .stderr(predicate::str::contains("Unknown branch name: production"));
+    repo.command()
+        .env("STABLE", "^other$")
+        .env("RELEASE", "^production$")
+        .arg("scope")
+        .assert()
+        .success()
+        .stdout("release\n");
+    repo.command()
+        .env("STABLE", "^production$")
+        .env("RELEASE", "^other$")
+        .args(["scope", "--release", "^production$"])
+        .assert()
+        .success()
+        .stdout("release\n");
+    TestRepo::new("main")
+        .command()
+        .env("STABLE", "[")
+        .arg("scope")
+        .assert()
+        .success()
+        .stdout("release\n");
+}
+
+#[test]
 fn scope_uses_major_minor_patch_release_precedence() {
     let repo = TestRepo::new("custom");
     let mut args = vec!["scope", "--release", ".*"];

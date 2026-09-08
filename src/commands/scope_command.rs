@@ -1,51 +1,33 @@
-use crate::default_error::DefaultError;
+use crate::branch_rules::{
+    ScopePatterns, MAJOR_PATTERN, MINOR_PATTERN, PATCH_PATTERN, STABLE_PATTERN,
+};
 use crate::pipelines;
 use clap::Args;
-use regex::Regex;
 use std::error::Error;
 
 #[derive(Args)]
 pub(crate) struct ScopeCommandArgs {
-    #[arg(long, env, default_value = r"^release/[0-9]+.x.x$")]
+    #[arg(long, env, default_value = MAJOR_PATTERN)]
     major: String,
 
-    #[arg(
-        long,
-        env,
-        default_value = r"^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$"
-    )]
+    #[arg(long, env, default_value = MINOR_PATTERN)]
     minor: String,
 
-    #[arg(long, env, default_value = r"^hotfix/[0-9]+.[0-9]+.[0-9]+$")]
+    #[arg(long, env, default_value = PATCH_PATTERN)]
     patch: String,
 
-    #[arg(long, env, default_value = r"^(main|master)$")]
+    #[arg(long, env, default_value = STABLE_PATTERN)]
     release: String,
 }
 
 pub(crate) fn run(args: ScopeCommandArgs) -> Result<(), Box<dyn Error>> {
-    let major_regex = Regex::new(&args.major)?;
-    let minor_regex = Regex::new(&args.minor)?;
-    let patch_regex = Regex::new(&args.patch)?;
-    let release_regex = Regex::new(&args.release)?;
-
     let pipeline = pipelines::current_pipeline();
-    let branch_name = &pipeline.branch_name();
-
-    if major_regex.is_match(branch_name) {
-        println!("major")
-    } else if minor_regex.is_match(branch_name) {
-        println!("minor")
-    } else if patch_regex.is_match(branch_name) {
-        println!("patch")
-    } else if release_regex.is_match(branch_name) {
-        println!("release")
-    } else {
-        return Err(Box::new(DefaultError {
-            message: format!("Unknown branch name: {}", branch_name),
-            source: None,
-        }));
-    }
-
+    let patterns = ScopePatterns {
+        major: args.major,
+        minor: args.minor,
+        patch: args.patch,
+        release: args.release,
+    };
+    println!("{}", patterns.resolve(&pipeline.branch_name())?.as_str());
     Ok(())
 }

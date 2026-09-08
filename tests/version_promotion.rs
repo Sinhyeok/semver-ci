@@ -137,6 +137,64 @@ fn ci_command(repo: &TestRepo, github: bool, target: &str) -> Command {
 }
 
 #[test]
+fn both_ci_providers_infer_policy_from_the_ci_branch_without_scope_command() {
+    for github in [false, true] {
+        let repo = released_repo();
+        repo.repo
+            .remote("origin", repo.repo.path().to_str().unwrap())
+            .unwrap();
+        let target = head(&repo.repo).to_string();
+        let branch_variable = if github {
+            "GITHUB_REF_NAME"
+        } else {
+            "CI_COMMIT_REF_NAME"
+        };
+        for (branch, upcoming) in [
+            ("release/2.x.x", "v2.0.0-rc.1"),
+            ("hotfix/1.2.4", "v1.2.4-rc.1"),
+        ] {
+            assert_official(
+                ci_command(&repo, github, &target).env(branch_variable, branch),
+                upcoming,
+                "v1.2.3",
+            );
+        }
+        assert_official(
+            ci_command(&repo, github, &target)
+                .env(branch_variable, "integration")
+                .env("MINOR", "^integration$")
+                .env("DEV", "^integration$"),
+            &format!("v1.3.0-dev.1.{}", &target[..8]),
+            "v1.2.3",
+        );
+    }
+}
+
+#[test]
+fn stable_bump_uses_the_targets_official_history_without_promoting_candidates() {
+    let repo = released_repo();
+    let base = head(&repo.repo);
+    let future = commit(&repo.repo, "release/9.x.x", "feat: future", &[base]);
+    tag(&repo.repo, "v9.0.0", future, false);
+    tag(&repo.repo, "v9.1.0-rc.1", future, false);
+    let target = commit(&repo.repo, "main", "fix: target", &[base]);
+    tag(&repo.repo, "v2.0.0-rc.1", target, true);
+    assert_official(
+        repo.command()
+            .args(["version", "--scope", "patch", "--stage", "stable"]),
+        "v1.2.4",
+        "v1.2.3",
+    );
+    std::fs::write(repo.repo.path().join("shallow"), format!("{target}\n")).unwrap();
+    repo.command()
+        .args(["version", "--scope", "patch", "--stage", "stable"])
+        .assert()
+        .failure()
+        .stdout("")
+        .stderr(predicate::str::contains("requires complete history"));
+}
+
+#[test]
 fn ci_uses_the_event_commit_instead_of_a_newer_checkout() {
     for github in [false, true] {
         let repo = released_repo();

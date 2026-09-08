@@ -1,31 +1,19 @@
-![release workflow](https://github.com/Sinhyeok/semver-ci/actions/workflows/release.yml/badge.svg)
-
 # Semver-CI
 
-Welcome to Semver-CI, an open-source project designed to seamlessly integrate semantic versioning into your continuous integration (CI) workflow. This tool automates the process of versioning releases, ensuring that every new build adheres strictly to the [Semantic Versioning](https://semver.org/) guidelines. With Semver-CI, developers can focus more on their code and less on the intricacies of version management.
+![release workflow](https://github.com/Sinhyeok/semver-ci/actions/workflows/release.yml/badge.svg)
 
-## Key Features:
-
-- **Automated Version Management**: Automatically increments your project's version based on branch names, tags and predefined rules.
-
-  | **Branch** | **Format** | **Example** |
-  | --- | --- | --- |
-  | develop, feature/* | v\<version>-<pre-release_stage>.<pre-release_number>.<short_commit_sha> | v0.1.0-dev.1.dfh890fd |
-  | release/\*, hotfix/\* | v\<version>-<pre-release_stage>.<pre-release_number> | v0.1.0-rc.1 |
-  | main, master | v\<version> | v0.1.0 |
-- **Customizable Rules**: Define how your version numbers increase (major, minor, patch) through simple configuration settings.
-- **Integration with CI Tools**: Easily integrates with popular CI services like GitHub Actions, GitLab CI, and Jenkins to streamline your development pipeline.
-- **Release Drafting**: Automatically generates release notes and drafts new releases with the updated version numbers.
-
-## Why Semver-CI?
-
-In today's fast-paced development environment, managing version numbers can be tedious and error-prone. Semver-CI takes the hassle out of versioning, ensuring your project's releases are consistent, predictable, and in compliance with semantic versioning principles. It's the perfect tool for teams looking to automate their release process and maintain high-quality software.
-
-Start integrating semantic versioning into your CI workflow with Semver-CI today and make your release process as efficient and error-free as possible.
+Calculate semantic versions from Git branches and tags, and create releases in GitHub or GitLab.
 
 ## Getting Started
+
+Run `svci version` to calculate `UPCOMING_VERSION` and `LAST_VERSION` from your
+branch and version tags. Scope and stage are inferred automatically.
+The CI examples pass the calculated version to build and release jobs.
+
 ### GitHub Actions
-- [example](https://github.com/Sinhyeok/semver-ci-example)
+
+[Example repository](https://github.com/Sinhyeok/semver-ci-example)
+
 ```yaml
 # .github/workflows/build.yml
 
@@ -41,6 +29,9 @@ on:
       - 'main'
       - 'master'
 
+permissions:
+  contents: read
+
 jobs:
   upcoming_version:
     runs-on: ubuntu-latest
@@ -49,13 +40,7 @@ jobs:
       UPCOMING_VERSION: ${{ steps.set_upcoming_version.outputs.UPCOMING_VERSION }}
     steps:
       - id: set_upcoming_version
-          #export MAJOR='^release/[0-9]+.x.x$'
-          #export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
-          #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
-          #export RELEASE='^(main|master)$'
-        run: |
-          export SCOPE=$(svci scope)
-          svci version >> "$GITHUB_OUTPUT"
+        run: svci version >> "$GITHUB_OUTPUT"
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -65,7 +50,7 @@ jobs:
     steps:
       - run: echo "build $RELEASE_TAG"
     env:
-      RELEASE_TAG: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
+      RELEASE_TAG: ${{ needs.upcoming_version.outputs.UPCOMING_VERSION }}
 
   release:
     runs-on: ubuntu-latest
@@ -77,11 +62,14 @@ jobs:
     steps:
       - run: svci release -g "$RELEASE_NAME"
     env:
-      RELEASE_NAME: ${{needs.upcoming_version.outputs.UPCOMING_VERSION}}
+      RELEASE_NAME: ${{ needs.upcoming_version.outputs.UPCOMING_VERSION }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
+
 ### GitLab CI/CD
-- [example](https://gitlab.com/attar.sh/semver-ci-example)
+
+[Example repository](https://gitlab.com/attar.sh/semver-ci-example)
+
 ```yaml
 # .gitlab-ci.yml
 
@@ -92,17 +80,13 @@ stages:
 
 upcoming_version:
   stage: before_build
+  variables:
+    GIT_DEPTH: "0"
   image:
     name: tartar4s/semver-ci
     entrypoint: [""]
   script:
-      #export MAJOR='^release/[0-9]+.x.x$'
-      #export MINOR='^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$'
-      #export PATCH='^hotfix/[0-9]+.[0-9]+.[0-9]+$'
-      #export RELEASE='^(main|master)$'
-    - |
-      export SCOPE=$(svci scope)
-      svci version >> version.env
+    - svci version > version.env
   artifacts:
     reports:
       # version.env:
@@ -117,7 +101,7 @@ build:
   script:
     - echo "build $UPCOMING_VERSION"
   rules:
-    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_BRANCH =~ /^(develop|feature\/.+|release\/.+|hotfix\/.+|main|master)$/
 
 release:
   stage: release
@@ -125,13 +109,16 @@ release:
     name: tartar4s/semver-ci
     entrypoint: [""]
   script:
-    - svci release -g -p $LAST_VERSION $UPCOMING_VERSION
+    - svci release -g -p "$LAST_VERSION" "$UPCOMING_VERSION"
   rules:
     - if: $CI_COMMIT_BRANCH =~ /^(main|master|release\/.+|hotfix\/.+)$/
 ```
-### Git Repo
-> [!NOTE]
-> The Git HEAD must be pointing to the branch. If it's a detached head, semver-ci won't work because it can't find the target branch.
+
+### Local Git Repository
+
+Run from a Git repository with a branch checked out. For version calculation and
+tagging, configure the [local Git credentials](#authentication) as needed.
+
 ```shell
 # help
 docker run tartar4s/semver-ci
@@ -147,7 +134,9 @@ docker run -v .:/app tartar4s/semver-ci tag --help
 ```
 
 ## Installation
-### Using Docker (recommended for CI)
+
+### Docker
+
 ```shell
 docker pull tartar4s/semver-ci
 ```
@@ -163,6 +152,7 @@ Replace `<version>` with a release tag that lists these variants in its artifact
 The tag without an OS suffix remains an alias for Alpine.
 
 ### Build from source
+
 ```shell
 git clone https://github.com/Sinhyeok/semver-ci.git
 cd semver-ci
@@ -170,220 +160,390 @@ cargo build --locked --release
 ./target/release/svci --version
 ```
 
+## Versioning
+
+### Scope and stage
+
+**Scope** chooses how the core version changes: `major`, `minor`, and `patch`
+increment an official version; `release` promotes a prerelease candidate.
+**Stage** chooses the version format: `dev`, `rc`, or `stable`.
+Scope `release` requires stage `stable`.
+
+`svci version` calculates these values and prints versions. The separate
+[`release` command](#release) creates a GitHub or GitLab release using a supplied
+name and tag.
+
+### Default branch rules
+
+GitHub Actions, GitLab CI, and local Git repositories use the same rules.
+These examples assume a previous official version of `v1.2.3` and no prerelease tags.
+
+| Branch | Scope | Stage | Format | Example |
+| --- | --- | --- | --- | --- |
+| `develop`, `feature/*` | minor | dev | `vX.Y.Z-dev.N.SHA` | `v1.3.0-dev.1.c8ae805d` |
+| `release/2.x.x` | major | rc | `vX.Y.Z-rc.N` | `v2.0.0-rc.1` |
+| `release/1.3.x` | minor | rc | `vX.Y.Z-rc.N` | `v1.3.0-rc.1` |
+| `hotfix/1.2.4` | patch | rc | `vX.Y.Z-rc.N` | `v1.2.4-rc.1` |
+| `main`, `master` | release | stable | `vX.Y.Z` | `v1.3.0` |
+
+Version-bearing branch names select a bump scope, not a maintenance release
+line. For example, `release/1.2.x` also selects `minor`; it does not pin the result
+to `1.2`. See [custom branch patterns](#custom-branch-patterns) for the exact rules.
+
+### Dev and RC versions
+
+Prerelease calculation starts from the highest official version among all
+available tags, including tags outside the current branch's history. It applies
+the resolved bump scope, then increments the highest prerelease number for that
+core version and stage. The number starts at `1` when no matching prerelease exists.
+Dev versions also include the target commit's short SHA.
+
+For example, with official `v1.2.3` and candidate `v1.3.0-rc.2`, scope `minor`
+and stage `rc` produce `v1.3.0-rc.3`. Dev and RC counters are independent.
+With no official tags, the base is `v0.0.0`.
+
+### Stable versions and promotion
+
+Stable calculation selects the highest official tag at the target commit or
+one of its ancestors. The target is local `HEAD`, `GITHUB_SHA` in GitHub Actions,
+or `CI_COMMIT_SHA` in GitLab CI. Annotated and lightweight tags are supported.
+Complete commit history and available version tags are required; see
+[shallow clones and missing tags](#shallow-clones-and-missing-tags).
+
+The resolved scope determines the next version:
+
+| Scope | Behavior | Example from `v1.2.3` |
+| --- | --- | --- |
+| `major`, `minor`, `patch` | Apply the bump to the previous official version, even when candidates exist. | `patch` produces `v1.2.4`, even with `v2.0.0-rc.1`. |
+| `release` | Promote newer reachable prereleases when they agree on one core version. | `v1.2.4-rc.1` and `v1.2.4-rc.2` produce `v1.2.4`. |
+| `release`, with no newer reachable candidate | Fall back to a minor bump. | `v1.3.0`; with no version tags, `v0.1.0`. |
+
+Automatic promotion ignores unmerged candidates and prereleases at or below the
+previous official version. If newer reachable candidates target different core
+versions, such as `v1.2.4` and `v2.0.0`, calculation fails and lists the candidates.
+Use explicit selection to choose one.
+
+### Explicit candidate selection
+
+Pass the exact existing tag name to promote a particular candidate, including
+after a squash merge or rebase:
+
+```shell
+svci version --stage stable --candidate v1.2.4-rc.1
+```
+
+This produces `v1.2.4` when the candidate is valid. Candidate selection requires
+stage `stable` and defaults an omitted scope to `release`. Explicit bump scopes
+(`major`, `minor`, `patch`), including values supplied through `SCOPE`, conflict
+with `--candidate`. The legacy `--scope release --candidate <tag>` form also works.
+
+The candidate must:
+
+- Exist as a tag pointing to a commit, using its exact name, including any `v` prefix.
+- Use `X.Y.Z-rc.N` or `X.Y.Z-dev.N.SHA`, optionally prefixed with `v`.
+- Have a core version newer than the target's previous official version.
+- Have no corresponding official tag anywhere in the repository, with or without `v`.
+
+The candidate can be outside the target's ancestry. Explicit selection associates
+it with the target release without verifying equivalent source changes or build
+artifacts. Full history is still required to find the previous official version,
+and all version tags must be available to detect an existing release.
+Invalid candidates fail without version outputs or a minor fallback.
+
+### Version outputs
+
+`version` writes two `KEY=value` lines to standard output:
+
+```text
+UPCOMING_VERSION=v1.3.0-rc.3
+LAST_VERSION=v1.3.0-rc.2
+```
+
+| Output | Dev / RC | Stable |
+| --- | --- | --- |
+| `UPCOMING_VERSION` | The next prerelease for the resolved scope and stage. | The bumped or promoted official version. |
+| `LAST_VERSION` | The highest existing prerelease for the calculated core version and stage, or the highest official version if none matches. | The highest official version in the target's history. |
+
+When no previous version applies, `LAST_VERSION` is `v0.0.0`.
+Diagnostics go to standard error, so CI jobs can capture standard output directly.
+
+## Configuration
+
+### Configuration precedence
+
+For each option, the command-line value takes precedence over its environment
+variable. For scope and stage, an omitted value is then inferred from branch
+rules. Only missing values require matching rules.
+
+An explicit `--scope release` or `SCOPE=release` defaults an omitted stage to
+`stable` on any named branch for compatibility. An explicit candidate defaults
+an omitted scope to `release`, as described in [candidate selection](#explicit-candidate-selection).
+
+### Override scope and stage
+
+```shell
+# Choose both values directly
+svci version --scope patch --stage stable
+svci version --scope patch --stage rc
+
+# On develop: override scope and infer stage=dev
+svci version --scope patch
+
+# On develop: override stage and infer scope=minor
+svci version --stage rc
+```
+
+The corresponding environment variables are `SCOPE` and `STAGE`.
+On main/master, a dev or RC override also needs a bump scope because the default
+scope is `release`. Unknown branches require every missing value to be configured;
+they are never implicitly treated as stable.
+
+### Custom branch patterns
+
+Set environment variables to replace the default regular expressions. Scope
+rules are checked in `MAJOR`, `MINOR`, `PATCH`, `RELEASE` order; stage rules in
+`DEV`, `RC`, `STABLE` order. The first matching rule in each group wins.
+
+| Variable | Default pattern |
+| --- | --- |
+| `MAJOR` | `^release/[0-9]+.x.x$` |
+| `MINOR` | `^(develop\|feature/.*\|release/[0-9]+.[0-9]+.x)$` |
+| `PATCH` | `^hotfix/[0-9]+.[0-9]+.[0-9]+$` |
+| `RELEASE` | `^(main\|master)$` |
+| `DEV` | `^(develop\|feature/.*)$` |
+| `RC` | `^(release\|hotfix)/.*$` |
+| `STABLE` | `^(main\|master)$` |
+
+`RELEASE` and `STABLE` have the same built-in pattern, but independent environment
+overrides: `RELEASE` configures scope, and `STABLE` configures stage.
+The legacy scope regex syntax and precedence are preserved. Invalid patterns
+in a group needed for inference cause an error, even if an earlier rule matches.
+
+```shell
+# On integration: scope=minor, stage=dev
+MINOR='^integration$' DEV='^integration$' svci version
+
+# On candidate: scope=patch, stage=rc
+PATCH='^candidate$' RC='^candidate$' svci version
+
+# On production: scope=release, stage=stable
+RELEASE='^production$' STABLE='^production$' svci version
+```
+
+Patterns replace their defaults; use regex alternatives to keep the default
+branches as well. Custom development and RC branches need both a scope and a
+stage rule unless the corresponding value is supplied directly.
+
+### Authentication
+
+| Environment | Git credentials | Release API credentials |
+| --- | --- | --- |
+| GitHub Actions | `GITHUB_TOKEN` | `GITHUB_TOKEN` |
+| GitLab CI | `SEMVER_CI_TOKEN` when set; otherwise `CI_JOB_TOKEN` | `CI_JOB_TOKEN` |
+| Local Git | `GIT_TOKEN` for HTTPS, or the SSH settings below | Provider release creation is unavailable in local Git mode. |
+
+For GitHub Actions, grant `contents: read` for version calculation and
+`contents: write` for release creation or tag pushes. For GitLab tag pushes,
+provide a `SEMVER_CI_TOKEN` with `read_repository` and `write_repository` permissions.
+The GitLab runner supplies `CI_JOB_TOKEN`; overriding Git credentials does not
+change the token used for release API requests.
+
+Local `version` and `tag` commands require `GIT_TOKEN` to be set. It can be empty
+when remote authentication is unnecessary, including version calculation using
+only existing local tags. Local tagging also uses Git's `user.name` and `user.email`.
+
+### Git settings and tag fetching
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `CLONE_TARGET_PATH` | `.` | Repository directory. |
+| `FORCE_FETCH_TAGS` | `false` for local Git | Fetch tags from `origin` before local version calculation when `true`. |
+| `GIT_SSH_KEY_PATH` | Unset | Private key path; required when Git authenticates over SSH. |
+| `GIT_SSH_KEY_PASSPHRASE` | Unset | Optional passphrase for the SSH key. |
+
+GitHub Actions and GitLab CI always fetch tags before calculating a version.
+`FORCE_FETCH_TAGS` controls local Git runs only. Fetching tags alone does not
+complete a shallow repository's commit history.
+
 ## Commands
+
+Use `svci <command> --help` for usage and `svci --version` for the installed
+version. Each command also supports `-h`/`--help` and `-V`/`--version`.
+
 ### version
-Print upcoming version based on last semantic version tag and branch
-```shell
-Usage: svci version [OPTIONS]
 
-Options:
-  -s, --scope <SCOPE>  [env: SCOPE=] [default: minor]
-      --candidate <TAG>  Promote this exact prerelease tag (official version calculation only) [env: CANDIDATE=]
-  -h, --help           Print help
-  -V, --version        Print version
-```
-#### Example
-```shell
-% svci version
-UPCOMING_VERSION=v0.8.0-dev.1.c8ae805d
-LAST_VERSION=v0.7.1
-```
-
-#### Official version selection
-
-On branches that produce official versions (including `main` and `master`), or
-with `--scope release`, version calculation uses only tags at the target commit
-or its ancestors. The target is local `HEAD`, `GITHUB_SHA` in GitHub Actions, or
-`CI_COMMIT_SHA` in GitLab CI. Both the previous official version (`LAST_VERSION`)
-and automatic prerelease candidates are selected from this history. Annotated
-and lightweight tags are supported.
-
-Unmerged release branches do not affect this calculation. For example, a merged
-`v1.2.4-rc.1` is promoted to `v1.2.4` even if an unmerged branch has `v2.0.0-rc.1`.
-Newer reachable prereleases must agree on a single `major.minor.patch` version.
-For example, `v1.2.4-rc.1` and `v1.2.4-rc.2` both produce `v1.2.4`. If candidates
-for both `v1.2.4` and `v2.0.0` are reachable, the command fails with the candidate
-tag names and prints no version outputs. It does not choose the highest version.
-Use `--candidate <tag>` to resolve this ambiguity explicitly.
-Prereleases at or below the last official version do not create ambiguity.
-
-If there is no newer reachable prerelease, the existing minor bump is retained:
-`v1.2.3` becomes `v1.3.0`. With no version tags, the initial version is `v0.1.0`
-and `LAST_VERSION` is `v0.0.0`. Prerelease generation on development and release
-branches keeps its existing version and counter selection rules.
-
-Official calculation requires complete commit history and available version
-tags. Shallow repositories fail without printing version outputs; fetching tags
-alone does not remove a shallow history boundary. Use a full checkout (for
-example, `fetch-depth: 0` with `actions/checkout`, or `GIT_DEPTH: "0"` in GitLab
-CI), or run `git fetch --unshallow --tags` for an existing shallow clone. The
-internal GitHub Actions clone fetches full history. Local runs should fetch tags
-first, or set `FORCE_FETCH_TAGS=true` to refresh them through Semver-CI.
-
-Normal merges and fast-forwards preserve candidate ancestry. Squash merges and
-rebases that rewrite tagged commits can remove that relationship; automatic
-selection cannot infer the original candidate from equivalent changes. If no
-newer candidate remains reachable, the minor fallback applies.
-
-#### Explicit candidate selection
-
-To promote a specific candidate, including after squash/rebase, pass its exact
-tag name (with or without `v`, matching the existing tag):
+Calculate and print the [upcoming and previous versions](#version-outputs).
+This command reads Git data; creating tags or provider releases is a separate step.
 
 ```shell
-svci version --scope release --candidate v1.2.4-rc.1
-# UPCOMING_VERSION=v1.2.4
-# LAST_VERSION=v1.2.3
+svci version
+svci version --scope patch --stage stable
+svci version --stage stable --candidate v1.2.4-rc.1
 ```
 
-`--candidate` (or the `CANDIDATE` environment variable) selects only that tag;
-the command-line option takes precedence over the environment. It is accepted
-on branches that already calculate official versions, or with `--scope release`.
-Using it during prerelease generation is an error.
+| Option | Environment variable | Behavior / default |
+| --- | --- | --- |
+| `-s`, `--scope <SCOPE>` | `SCOPE` | `major`, `minor`, `patch`, or `release`; inferred when omitted. |
+| `--stage <STAGE>` | `STAGE` | `dev`, `rc`, or `stable`; inferred when omitted. |
+| `--candidate <TAG>` | `CANDIDATE` | Promote the exact tag; unset by default. Requires stable calculation. |
 
-The tag must exist, point to a commit, and use a supported prerelease format
-(`X.Y.Z-rc.N` or `X.Y.Z-dev.N.SHA`, optionally prefixed with `v`). Its official
-version must be newer than `LAST_VERSION` and must not already have an official
-tag anywhere in the repository, including an equivalent unprefixed tag.
-Invalid or missing candidates fail without version outputs or a minor fallback.
+### release
 
-Explicit selection declares the caller's intent to associate that candidate
-with the target release. The candidate need not be an ancestor of the target;
-the command does not verify equivalent source changes or build artifacts.
-Pipelines that intend to promote a particular RC should always pass it explicitly,
-especially when using squash/rebase. Full history is still required to determine
-`LAST_VERSION`, and all version tags must be available to detect existing releases.
+Create a published GitHub or GitLab release. The required `<NAME>` is also the
+tag name unless `--tag-name` is supplied.
+
+```shell
+# GitHub Actions
+svci release -g v1.3.0
+
+# GitLab CI: compare against the previous version for release notes
+svci release -g -p v1.2.3 v1.3.0
+
+# Use a display name distinct from the tag
+svci release --tag-name v1.3.0 "Version 1.3.0"
+```
+
+| Option | Environment variable | Behavior / default |
+| --- | --- | --- |
+| `--description <DESCRIPTION>` | `DESCRIPTION` | Release description; empty by default. |
+| `--tag-name <TAG_NAME>` | `TAG_NAME` | Defaults to `<NAME>`. |
+| `--tag-message <TAG_MESSAGE>` | `TAG_MESSAGE` | Message for creating an annotated tag in GitLab; empty by default. Ignored by GitHub. |
+| `-g`, `--generate-release-notes` | `GENERATE_RELEASE_NOTES` | Generate notes and prepend any description; `false` by default. |
+| `-p`, `--previous-tag <PREVIOUS_TAG>` | `PREVIOUS_TAG` | GitLab comparison base for generated notes; empty by default. Pass `v0.0.0` for an initial release. |
+| `-s`, `--strip-prefix-v` | `STRIP_PREFIX_V` | Accepted but currently has no effect; `false` by default ([#56](https://github.com/Sinhyeok/semver-ci/issues/56)). |
+
+There is no draft option. GitHub releases are not automatically marked as
+prereleases for dev or RC tags ([#57](https://github.com/Sinhyeok/semver-ci/issues/57)).
+To omit a `v` prefix, supply the desired name and tag directly.
+
+### tag
+
+Create an annotated tag at the repository's `HEAD` and push it to `origin`.
+The tag name is a required argument.
+
+```shell
+svci tag v1.3.0 --tag-message "Release v1.3.0"
+```
+
+| Option | Environment variable | Behavior / default |
+| --- | --- | --- |
+| `--tag-message <TAG_MESSAGE>` | `TAG_MESSAGE` | Annotation message; empty by default. |
+| `-s`, `--strip-prefix-v` | `STRIP_PREFIX_V` | Remove a leading `v` from the tag name; `false` by default. |
+
+See [authentication](#authentication) for Git push credentials.
 
 ### scope
-Print scope based on branch name
+
+Print `major`, `minor`, `patch`, or `release` from the branch name. This command
+remains supported for independent use and existing CI workflows; it prints no stage.
+
 ```shell
-Usage: svci scope [OPTIONS]
+svci scope
 
-Options:
-      --major <MAJOR>  [env: MAJOR=] [default: ^release/[0-9]+.x.x$]
-      --minor <MINOR>  [env: MINOR=] [default: ^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$]
-      --patch <PATCH>  [env: PATCH=] [default: ^hotfix/[0-9]+.[0-9]+.[0-9]+$]
-  -h, --help           Print help
-  -V, --version        Print version
+# Existing command composition
+export SCOPE=$(svci scope)
+svci version
 ```
-#### Example
+
+| Option | Environment variable | Behavior / default |
+| --- | --- | --- |
+| `--major <MAJOR>` | `MAJOR` | Major branch regex. |
+| `--minor <MINOR>` | `MINOR` | Minor branch regex. |
+| `--patch <PATCH>` | `PATCH` | Patch branch regex. |
+| `--release <RELEASE>` | `RELEASE` | Release scope regex. |
+
+Defaults and matching order are shared with the
+[scope branch patterns](#custom-branch-patterns). Flags override environment values
+for this invocation only. When passing the result to `version` on a custom branch,
+configure the stage separately. An explicit `SCOPE=release` defaults the stage to
+stable, so existing `RELEASE` patterns still work with this composition.
+
+## Troubleshooting
+
+### Unknown branches and invalid combinations
+
+For an unmapped branch, configure both scope and stage through
+[options or branch patterns](#configuration). Scope `release` cannot be combined
+with stage `dev` or `rc`; select a bump scope instead. `--candidate` requires
+stable calculation and cannot be combined with an explicit bump scope.
+Invalid option values or patterns needed for inference cause an error without
+version outputs.
+
+### Shallow clones and missing tags
+
+Stable calculation requires full history. Use `GIT_DEPTH: "0"` in GitLab CI or
+`fetch-depth: 0` with `actions/checkout`. Semver-CI's internal GitHub Actions clone
+fetches full history when it creates the checkout itself.
+
+For an existing shallow clone:
+
 ```shell
-% svci scope
-minor
+git fetch --unshallow --tags
 ```
-### release
-Create a release in GitHub or GitLab
-```shell
-Usage: svci release [OPTIONS] <NAME>
 
-Arguments:
-  <NAME>  Release name
+For a complete local clone with stale tags, run `git fetch --tags` or set
+`FORCE_FETCH_TAGS=true`. All version tags must be available when checking whether
+an explicit candidate has already been released.
 
-Options:
-      --description <DESCRIPTION>    Release description [env: DESCRIPTION=] [default: ]
-      --tag-name <TAG_NAME>          [env: TAG_NAME=]
-      --tag-message <TAG_MESSAGE>    Specify tag_message to create an annotated tag [env: TAG_MESSAGE=] [default: ]
-  -g, --generate-release-notes       Automatically generate the body for this release. If description is specified, the description will be pre-pended to the automatically generated notes [env: GENERATE_RELEASE_NOTES=]
-  -p, --previous-tag <PREVIOUS_TAG>  (Only for GitLab CI) tag from previous releases to compare when automatically generating release notes [env: PREVIOUS_TAG=] [default: ]
-  -s, --strip-prefix-v               Strip prefix "v" from release name and tag name. ex) v0.1.0 => 0.1.0 [env: STRIP_PREFIX_V=]
-  -h, --help                         Print help
-  -V, --version                      Print version
-```
-### tag
-Create and push git tag to origin
-```shell
-Usage: svci tag [OPTIONS] <TAG_NAME>
+### Multiple candidates, squash merges, and rebases
 
-Arguments:
-  <TAG_NAME>  
+When automatic promotion reports multiple core versions, pass the intended tag
+with [`--candidate`](#explicit-candidate-selection). Normal merges and fast-forwards
+preserve candidate ancestry; squash merges and rebases can remove it. If no newer
+candidate remains reachable, automatic promotion falls back to a minor bump.
+Pass a candidate explicitly when the pipeline must promote a particular RC.
 
-Options:
-      --tag-message <TAG_MESSAGE>  [env: TAG_MESSAGE=] [default: ]
-  -s, --strip-prefix-v             [env: STRIP_PREFIX_V=]
-  -h, --help                       Print help
-  -V, --version                    Print version
-```
-> [!NOTE]
-> For tagging on GitLab CI, "SEMVER_CI_TOKEN" with read_repository/write_repository permissions must be set in CI/CD variables
+### Detached HEAD
 
+Local runs require a checked-out branch. GitHub Actions and GitLab CI use the
+branch and commit variables supplied by their provider, so CI checkouts may be detached.
+
+### Authentication errors
+
+Check the [credentials for your environment](#authentication) and repository
+permissions. For SSH remotes, also set `GIT_SSH_KEY_PATH` and the key passphrase
+if needed. Local `version` requires `GIT_TOKEN` even when its value is empty.
 
 ## Development
-### Install rustup and cmake
-#### Mac
+
+### Set up the environment
+
+Install Rustup and CMake. On macOS:
+
 ```shell
 brew install rustup cmake
 ```
-### Setup Project
-The project pins Rust and Cargo to **1.98.1** in `rust-toolchain.toml`.
-Rustup installs that toolchain and the configured targets when you run Cargo.
-Local development, CI, and Docker builds all use this file.
-The Docker bootstrap image uses `rust:1.98-bookworm` to track published patch
-updates within Rust 1.98. Rustup installs and selects the project's **1.98.1**
-toolchain inside that builder.
 
-```shell
-# Clone project
-git clone git@github.com:Sinhyeok/semver-ci.git
-cd semver-ci
+Clone the repository as shown in [Installation](#build-from-source).
+[rust-toolchain.toml](rust-toolchain.toml) pins Rust and Cargo to **1.98.1** and
+includes Clippy and rustfmt. Rustup installs the configured toolchain when Cargo runs.
 
-# Create .env
-touch .env
-vi .env
-```
-#### Example `.env`
+For local development, create `.env` in the repository root:
+
 ```dotenv
-# GitHub
-## develop
-#GITHUB_ACTIONS=true
-#GITHUB_REF_NAME=develop
-#GITHUB_SHA=g9i8thubrt290384egrfy2837
-#GITHUB_ACTOR=Sinhyeok
-#GITHUB_TOKEN=github_pat_asd897fytaw7890efh2394hef9asdhp9fas8ydfh
-#GITHUB_SERVER_URL=https://github.com
-#GITHUB_REPOSITORY=Sinhyeok/semver-ci
-
-# GitLab
-## develop
-GITLAB_CI=true
-CI_COMMIT_REF_NAME=develop
-CI_COMMIT_SHORT_SHA=g9i0tlab
-GITLAB_USER_EMAIL=user@mail.com
-SEMVER_CI_TOKEN=glpat_908d21yh0ewfd98h
-CI_JOB_TOKEN=vn0w9e7dfgy97esd8f
-CI_PROJECT_URL=https://gitlab.com/attar.sh/semver-ci
-## hotfix
-#GITLAB_CI=true
-#CI_COMMIT_REF_NAME=hotfix/0.2.34
-#CI_COMMIT_SHORT_SHA=b08640bd
-
-# Git Repo
-#GIT_SSH_KEY_PATH=$HOME/.ssh/id_rsa
-#GIT_SSH_KEY_PASSPHRASE={YOUR_PASSWORD}
-#FORCE_FETCH_TAGS=true
+GITHUB_ACTIONS=false
+GITLAB_CI=false
+GIT_TOKEN=
+FORCE_FETCH_TAGS=false
 ```
 
-### Run
+This uses the current Git checkout and existing local tags. CI providers supply
+their own branch, commit, and job variables during pipeline runs. See
+[Configuration](#configuration) when remote access or custom branches are needed.
+
+### Run, test, and lint
+
 ```shell
-# Show help
-cargo run version --help
-
-# Run
-cargo run version
-cargo run version --scope major
-cargo run version --scope patch
+cargo run -- version --help
+cargo run -- version
+cargo run -- version --scope patch --stage stable
+cargo test --locked --all-features
+cargo fmt --all --check
+cargo clippy --locked --all-targets --all-features -- -D warnings
 ```
 
-### Install Lint Tools
-```shell
-rustup component add clippy rustfmt
-```
-### Run lint
-```shell
-cargo clippy
-cargo fmt
-```
+### Build and test containers
 
-### Build and test container images
 ```shell
 docker build --platform linux/amd64 --build-arg VARIANT=alpine -t semver-ci:alpine .
 docker build --platform linux/amd64 --build-arg VARIANT=debian -t semver-ci:debian .
@@ -391,24 +551,11 @@ bash tests/container.sh semver-ci:alpine alpine
 bash tests/container.sh semver-ci:debian debian
 ```
 
-Local Docker builds use the release profile by default. For a debug build, add
-`--build-arg CARGO_PROFILE=dev` to either command; this replaces `debug.Dockerfile`.
-The release workflow explicitly uses `CARGO_PROFILE=dev` to preserve the debug
-builds previously produced by `debug.Dockerfile`. It builds each variant once,
-runs the container checks, and pushes the tested image. The reusable CI workflow
-runs Rust lint and tests.
-The release workflow runs only on pushes to `develop`, `main`, `release/**`, and
-`hotfix/**`. Feature pull requests run PR CI. In addition to Rust lint and tests,
-PR CI builds and checks both container variants when the PR changes Dockerfiles,
-`.dockerignore`, Cargo manifests or lockfiles, the Rust toolchain, `.cargo/`,
-workflow definitions, or `tests/container.sh`. These PR checks do not push images.
-
-## Troubleshooting
-- Detached HEAD: Ensure a branch is checked out. In CI, the ref is fetched and checked out automatically.
-- Auth/token errors: GitHub requires GITHUB_TOKEN; GitLab requires CI_JOB_TOKEN or SEMVER_CI_TOKEN.
-- Tags not up to date: Set FORCE_FETCH_TAGS=true to force-sync remote tags.
-- SSH auth: Set GIT_SSH_KEY_PATH and, if needed, GIT_SSH_KEY_PASSPHRASE.
+Local builds use the release profile by default. Add `--build-arg CARGO_PROFILE=dev`
+for a debug build. See [Contributing](.github/CONTRIBUTING.md#ci-and-container-builds)
+for CI triggers, toolchain setup, and image publishing details.
 
 ## Contributing & License
-- Contributing: See `.github/CONTRIBUTING.md`
-- License: See `LICENSE`
+
+See the [contribution guidelines](.github/CONTRIBUTING.md) for branch and commit
+conventions and [LICENSE](LICENSE) for the license terms.

@@ -564,6 +564,29 @@ fn candidate_must_point_to_a_commit() {
 }
 
 #[test]
+fn stable_bumps_and_explicit_candidates_ignore_unneeded_prerelease_objects() {
+    let repo = released_repo();
+    tag(&repo.repo, "v1.2.4-rc.1", head(&repo.repo), false);
+    let blob = repo.repo.blob(b"not a release commit").unwrap();
+    let object = repo.repo.find_object(blob, None).unwrap();
+    repo.repo
+        .tag_lightweight("v9.0.0-rc.1", &object, false)
+        .unwrap();
+
+    assert_official(
+        repo.command().args(["version", "--scope", "patch"]),
+        "v1.2.4",
+        "v1.2.3",
+    );
+    assert_official(
+        repo.command()
+            .args(["version", "--candidate", "v1.2.4-rc.1"]),
+        "v1.2.4",
+        "v1.2.3",
+    );
+}
+
+#[test]
 fn explicit_candidate_still_requires_complete_history_for_last_version() {
     let repo = released_repo();
     let target = commit(&repo.repo, "main", "fix: hotfix", &[head(&repo.repo)]);

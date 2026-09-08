@@ -197,6 +197,61 @@ fn release_candidate_does_not_reuse_the_dev_counter() {
 }
 
 #[test]
+fn inference_preserves_legacy_tag_formats_and_explicit_candidates_remain_strict() {
+    let repo = repo_with_tags(
+        "develop",
+        &[
+            "v1.2.3",
+            "v1.3.0-dev.2.abcdef12.extra",
+            "v01.3.0-dev.99.abcdef12",
+            "v1.3.0-dev.+99.abcdef12",
+        ],
+    );
+    assert_version(
+        &repo,
+        repo.command().arg("version"),
+        "v1.3.0-dev.3.{sha}",
+        "v1.3.0-dev.2.abcdef12",
+    );
+    repo.command()
+        .args([
+            "version",
+            "--stage",
+            "stable",
+            "--candidate",
+            "v1.3.0-dev.2.abcdef12.extra",
+        ])
+        .assert()
+        .failure()
+        .stdout("")
+        .stderr(predicate::str::contains(
+            "expected a valid dev or rc prerelease tag",
+        ));
+
+    let repo = repo_with_tags("main", &["v1.2.3", "v01.3.0-rc.2", "v+9.0.0-rc.1"]);
+    assert_version(&repo, repo.command().arg("version"), "v1.3.0", "v1.2.3");
+}
+
+#[test]
+fn equal_prerelease_precedence_keeps_the_first_tag_in_name_order() {
+    let repo = repo_with_tags(
+        "develop",
+        &[
+            "v1.2.3",
+            "v1.3.0-dev.2.ffffffff",
+            "v1.3.0-dev.2.aaaaaaaa",
+            "1.3.0-dev.2.bbbbbbbb",
+        ],
+    );
+    assert_version(
+        &repo,
+        repo.command().arg("version"),
+        "v1.3.0-dev.3.{sha}",
+        "v1.3.0-dev.2.bbbbbbbb",
+    );
+}
+
+#[test]
 fn malformed_semantic_tags_are_skipped_when_selecting_a_release() {
     let repo = repo_with_tags(
         "main",

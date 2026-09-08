@@ -3,16 +3,28 @@ use crate::default_error::DefaultError;
 use crate::git_service;
 use crate::release_target::{target_error, ReleaseTarget};
 use crate::semantic_version::SemanticVersion;
-use log::error;
 use regex::Regex;
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::error::Error;
 
 const SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+)$";
 const SEMANTIC_VERSION_TAG_PRERELEASE_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+-.+)$";
 
 type OfficialVersionCandidates<'a> = BTreeMap<(u64, u64, u64), Vec<&'a str>>;
+
+#[derive(PartialEq, Eq)]
+enum TagKind {
+    Official,
+    Prerelease,
+    Other,
+}
+
+struct VersionTag {
+    name: String,
+    version: SemanticVersion,
+    kind: TagKind,
+}
 
 /// Inputs for version selection, independent of CLI arguments and pipeline types.
 pub(crate) struct VersionRequest<'a> {
@@ -32,22 +44,28 @@ pub(crate) struct VersionResult {
 }
 
 pub(crate) fn calculate(request: VersionRequest<'_>) -> Result<VersionResult, Box<dyn Error>> {
-    let tag_names = select_version_tags(&request, request.stage == Stage::Stable)?;
-    let last_official = select_last_official(&tag_names, request.target)?;
+    let all_tags = parse_version_tags(request.tag_names);
+    let reachable_tags = select_reachable_tags(&request, &all_tags)?;
+    let last_official = resolve_base(&reachable_tags, request.target)?;
 
     if let Some(target) = request.target {
-        validate_target(target, &last_official, request.tag_names)?;
+        validate_target(target, &last_official, &all_tags)?;
     }
 
     match request.stage {
-        Stage::Stable => calculate_stable(&request, &tag_names, &last_official),
-        Stage::Dev | Stage::Rc => Ok(calculate_prerelease(&request, &tag_names, &last_official)),
+        Stage::Stable => calculate_stable(&request, &reachable_tags, &all_tags, &last_official),
+        Stage::Dev | Stage::Rc => Ok(calculate_prerelease(
+            &request,
+            &reachable_tags,
+            &last_official,
+        )),
     }
 }
 
 fn calculate_stable(
     request: &VersionRequest<'_>,
-    tag_names: &[String],
+    reachable_tags: &[&VersionTag],
+    all_tags: &[VersionTag],
     last_official: &SemanticVersion,
 ) -> Result<VersionResult, Box<dyn Error>> {
     let upcoming_version = match (request.candidate, request.scope) {
@@ -55,10 +73,11 @@ fn calculate_stable(
             request.repo_path,
             candidate,
             request.tag_names,
+            all_tags,
             last_official,
         )?,
         (None, Scope::Release) => {
-            promote_reachable_candidate(tag_names, last_official, request.target)?
+            promote_reachable_candidate(reachable_tags, last_official, request.target)?
         }
         (None, scope) => resolve_next_core(last_official, request.target, scope).to_string(true),
     };
@@ -72,20 +91,12 @@ fn calculate_stable(
 
 fn calculate_prerelease(
     request: &VersionRequest<'_>,
-    tag_names: &[String],
+    reachable_tags: &[&VersionTag],
     last_official: &SemanticVersion,
 ) -> VersionResult {
     let stage = request.stage.as_str();
     let mut upcoming_core = resolve_next_core(last_official, request.target, request.scope);
-    let latest_prerelease = last_tag_by_pattern(
-        tag_names,
-        &format!(
-            r"^v?{}-{}\.[0-9]+.*$",
-            regex::escape(&upcoming_core.to_string(false)),
-            stage
-        ),
-        None,
-    );
+    let latest_prerelease = latest_prerelease(reachable_tags, &upcoming_core, request.stage);
     let last_version = latest_prerelease
         .as_ref()
         .unwrap_or(last_official)
@@ -110,23 +121,15 @@ fn resolve_next_core(
 ) -> SemanticVersion {
     match target {
         Some(target) => target.version.clone(),
-        None => last_official
-            .clone()
-            .increase_by_scope(scope.as_str().to_string()),
+        None => last_official.increase_by_scope(scope.as_str().to_string()),
     }
 }
 
 fn validate_target(
     target: &ReleaseTarget,
     last_official: &SemanticVersion,
-    all_tags: &[String],
+    all_tags: &[VersionTag],
 ) -> Result<(), Box<dyn Error>> {
-    if !target.includes_base(last_official) {
-        return Err(target_error(format!(
-            "No reachable official base in the release line for target {}. Fetch complete tags/history and check the branch base.",
-            target.version.to_string(true)
-        )));
-    }
     if target.version.cmp(last_official) != Ordering::Greater {
         return Err(target_error(format!(
             "Target {} must be newer than the release line's last official version ({}).",
@@ -134,16 +137,11 @@ fn validate_target(
             last_official.to_string(true)
         )));
     }
-    let official_pattern = Regex::new(SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN).unwrap();
-    for tag in all_tags {
-        if official_pattern.is_match(tag)
-            && SemanticVersion::from_string(tag.clone()).is_ok_and(|v| v == target.version)
-        {
-            return Err(target_error(format!(
-                "Target {} is already released as tag '{tag}'. Select a new target.",
-                target.version.to_string(true)
-            )));
-        }
+    if let Some(tag) = find_published_official(all_tags, &target.version) {
+        return Err(target_error(format!(
+            "Target {} is already released as tag '{tag}'. Select a new target.",
+            target.version.to_string(true)
+        )));
     }
     Ok(())
 }
@@ -164,74 +162,97 @@ fn validate_result_target(
     Ok(())
 }
 
-fn select_last_official(
-    tag_names: &[String],
+fn resolve_base(
+    reachable_tags: &[&VersionTag],
     target: Option<&ReleaseTarget>,
 ) -> Result<SemanticVersion, Box<dyn Error>> {
-    let Some(target) = target else {
-        return Ok(last_tag_by_pattern(
-            tag_names,
-            SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN,
-            Some(SemanticVersion::default()),
-        )
-        .unwrap());
-    };
-    let pattern = Regex::new(SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN).unwrap();
-    let official_versions: Vec<_> = tag_names
+    let official_versions = reachable_tags
         .iter()
-        .filter(|tag| pattern.is_match(tag))
-        .filter_map(|tag| SemanticVersion::from_string(tag.clone()).ok())
-        .collect();
-    if official_versions.is_empty() {
-        return Ok(SemanticVersion::default());
-    }
-    official_versions.into_iter()
-        .filter(|version| target.includes_base(version))
-        .max()
-        .ok_or_else(|| target_error(format!(
-            "No reachable official base in the release line for target {}. Fetch complete tags/history and check the branch base.",
-            target.version.to_string(true)
-        )))
+        .filter(|tag| tag.kind == TagKind::Official)
+        .map(|tag| &tag.version);
+    let Some(target) = target else {
+        return Ok(latest_version(official_versions).unwrap_or_else(SemanticVersion::default));
+    };
+
+    // Only history with no official version may start from v0.0.0.
+    let mut official_versions = official_versions.peekable();
+    let initial_version = SemanticVersion::default();
+    let fallback = official_versions
+        .peek()
+        .is_none()
+        .then_some(&initial_version);
+    latest_version(
+        official_versions
+            .chain(fallback)
+            .filter(|version| target.includes_base(version)),
+    )
+    .ok_or_else(|| target_error(format!(
+        "No reachable official base in the release line for target {}. Fetch complete tags/history and check the branch base.",
+        target.version.to_string(true)
+    )))
 }
 
-fn select_version_tags(
+fn parse_version_tags(tag_names: &[String]) -> Vec<VersionTag> {
+    let official_pattern = Regex::new(SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN).unwrap();
+    let prerelease_pattern = Regex::new(SEMANTIC_VERSION_TAG_PRERELEASE_PATTERN).unwrap();
+    tag_names
+        .iter()
+        .filter_map(|name| {
+            let version = SemanticVersion::from_string(name.clone()).ok()?;
+            // Keep name classification separate from the permissive version parser.
+            let kind = if official_pattern.is_match(name) {
+                TagKind::Official
+            } else if prerelease_pattern.is_match(name) {
+                TagKind::Prerelease
+            } else {
+                TagKind::Other
+            };
+            Some(VersionTag {
+                name: name.clone(),
+                version,
+                kind,
+            })
+        })
+        .collect()
+}
+
+fn select_reachable_tags<'a>(
     request: &VersionRequest<'_>,
-    is_official: bool,
-) -> Result<Vec<String>, Box<dyn Error>> {
+    all_tags: &'a [VersionTag],
+) -> Result<Vec<&'a VersionTag>, Box<dyn Error>> {
     // Version inference uses the target's history for both official bases and
     // prereleases. Stable bumps and explicit promotion only need official bases.
-    let include_prereleases =
-        !is_official || (request.scope == Scope::Release && request.candidate.is_none());
-    let official_pattern = Regex::new(SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN).unwrap();
-    let selection_tags: Vec<_> = request
-        .tag_names
+    let include_prereleases = request.stage != Stage::Stable
+        || (request.scope == Scope::Release && request.candidate.is_none());
+    let selection_tags: Vec<_> = all_tags
         .iter()
-        .filter(|tag| include_prereleases || official_pattern.is_match(tag))
-        .filter(|tag| {
-            let Ok(mut version) = SemanticVersion::from_string((*tag).clone()) else {
-                return false;
-            };
-            match request.target {
-                Some(_) if official_pattern.is_match(tag) => true,
-                Some(target) => version.release() == target.version,
-                None => true,
-            }
+        .filter(|tag| include_prereleases || tag.kind == TagKind::Official)
+        .filter(|tag| match request.target {
+            Some(_) if tag.kind == TagKind::Official => true,
+            Some(target) => tag.version.release() == target.version,
+            None => true,
         })
-        .cloned()
+        .map(|tag| tag.name.clone())
         .collect();
-    Ok(git_service::reachable_tag_names(
+    let reachable_names: HashSet<_> = git_service::reachable_tag_names(
         request.repo_path,
         &selection_tags,
         request.target_commit,
-    )?)
+    )?
+    .into_iter()
+    .collect();
+    Ok(all_tags
+        .iter()
+        .filter(|tag| reachable_names.contains(&tag.name))
+        .collect())
 }
 
 fn promote_reachable_candidate(
-    tag_names: &[String],
+    reachable_tags: &[&VersionTag],
     last_official_version: &SemanticVersion,
     target: Option<&ReleaseTarget>,
 ) -> Result<String, Box<dyn Error>> {
-    let candidates = collect_official_candidates(tag_names, last_official_version);
+    let candidates = collect_official_candidates(reachable_tags, last_official_version);
     match (select_official_candidate(&candidates)?, target) {
         (Some(version), _) => Ok(version),
         (None, Some(target)) => Err(target_error(format!(
@@ -243,24 +264,20 @@ fn promote_reachable_candidate(
 }
 
 fn collect_official_candidates<'a>(
-    tag_names: &'a [String],
+    reachable_tags: &[&'a VersionTag],
     last_official_version: &SemanticVersion,
 ) -> OfficialVersionCandidates<'a> {
-    let pattern = Regex::new(SEMANTIC_VERSION_TAG_PRERELEASE_PATTERN).unwrap();
     let mut candidates = OfficialVersionCandidates::new();
-    for tag_name in tag_names {
-        if !pattern.is_match(tag_name) {
+    for tag in reachable_tags {
+        if tag.kind != TagKind::Prerelease {
             continue;
         }
-        let Ok(mut version) = SemanticVersion::from_string(tag_name.clone()) else {
-            continue;
-        };
-        let version = version.release();
+        let version = tag.version.release();
         if version.cmp(last_official_version) == Ordering::Greater {
             candidates
                 .entry((version.major, version.minor, version.patch))
                 .or_default()
-                .push(tag_name);
+                .push(tag.name.as_str());
         }
     }
     candidates
@@ -295,7 +312,6 @@ fn minor_fallback_version(last_official_version: &SemanticVersion) -> String {
         last_official_version.to_string(true)
     );
     last_official_version
-        .clone()
         .increase_by_scope("minor".to_string())
         .to_string(true)
 }
@@ -304,15 +320,16 @@ fn promote_explicit_candidate(
     repo_path: &str,
     candidate: &str,
     all_tag_names: &[String],
+    all_tags: &[VersionTag],
     last_official_version: &SemanticVersion,
 ) -> Result<String, Box<dyn Error>> {
     validate_candidate_tag_exists(candidate, all_tag_names)?;
-    let mut version = parse_candidate_prerelease(candidate)?;
+    let version = parse_candidate_prerelease(candidate)?;
     validate_candidate_tag_commit(repo_path, candidate)?;
 
     let official = version.release();
     validate_candidate_version_increase(candidate, &official, last_official_version)?;
-    validate_candidate_not_released(candidate, &official, all_tag_names)?;
+    validate_candidate_not_released(candidate, &official, all_tags)?;
 
     Ok(official.to_string(true))
 }
@@ -381,46 +398,51 @@ fn validate_candidate_version_increase(
 fn validate_candidate_not_released(
     candidate: &str,
     official: &SemanticVersion,
-    all_tag_names: &[String],
+    all_tags: &[VersionTag],
 ) -> Result<(), Box<dyn Error>> {
-    let official_pattern = Regex::new(SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN).unwrap();
-    for tag in all_tag_names {
-        if official_pattern.is_match(tag)
-            && SemanticVersion::from_string(tag.clone())
-                .is_ok_and(|version| version.cmp(official) == Ordering::Equal)
-        {
-            return Err(invalid_candidate(
-                candidate,
-                format!("official version already exists as tag '{tag}'"),
-            ));
-        }
+    if let Some(tag) = find_published_official(all_tags, official) {
+        return Err(invalid_candidate(
+            candidate,
+            format!("official version already exists as tag '{tag}'"),
+        ));
     }
     Ok(())
 }
 
-fn last_tag_by_pattern(
-    tag_names: &[String],
-    tag_pattern: &str,
-    default: Option<SemanticVersion>,
+fn find_published_official<'a>(
+    all_tags: &'a [VersionTag],
+    official: &SemanticVersion,
+) -> Option<&'a str> {
+    all_tags
+        .iter()
+        .find(|tag| tag.kind == TagKind::Official && tag.version == *official)
+        .map(|tag| tag.name.as_str())
+}
+
+fn latest_prerelease(
+    reachable_tags: &[&VersionTag],
+    core: &SemanticVersion,
+    stage: Stage,
 ) -> Option<SemanticVersion> {
-    let tag_regex = Regex::new(tag_pattern).unwrap();
-    let mut valid_versions: Vec<SemanticVersion> = vec![];
+    let pattern = Regex::new(&format!(
+        r"^v?{}-{}\.[0-9]+.*$",
+        regex::escape(&core.to_string(false)),
+        stage.as_str()
+    ))
+    .unwrap();
+    latest_version(
+        reachable_tags
+            .iter()
+            .filter(|tag| pattern.is_match(&tag.name))
+            .map(|tag| &tag.version),
+    )
+}
 
-    for tag_name in tag_names {
-        if !tag_regex.is_match(tag_name) {
-            continue;
-        }
-
-        match SemanticVersion::from_string(tag_name.to_string()) {
-            Ok(version) => valid_versions.push(version),
-            Err(msg) => error!("{}", msg),
-        }
-    }
-
-    if valid_versions.is_empty() {
-        default
-    } else {
-        valid_versions.sort_by(|a, b| b.cmp(a));
-        Some(valid_versions[0].clone())
-    }
+fn latest_version<'a>(
+    versions: impl Iterator<Item = &'a SemanticVersion>,
+) -> Option<SemanticVersion> {
+    // Preserve the first tag when precedence is equal, including different dev SHAs.
+    versions
+        .reduce(|latest, version| if version > latest { version } else { latest })
+        .cloned()
 }

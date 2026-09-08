@@ -79,7 +79,7 @@ fn ordering_uses_numeric_components_then_prerelease_precedence() {
 #[test]
 fn scope_bumps_reset_lower_components_and_preserve_the_source() {
     for (scope, expected) in [("major", "2.0.0"), ("minor", "1.3.0"), ("patch", "1.2.4")] {
-        let mut source = parse("1.2.3");
+        let source = parse("1.2.3");
         assert_eq!(source.increase_by_scope(scope.to_string()), parse(expected));
         assert_eq!(source, parse("1.2.3"));
     }
@@ -87,7 +87,7 @@ fn scope_bumps_reset_lower_components_and_preserve_the_source() {
 
 #[test]
 fn prerelease_bump_preserves_stage_sha_and_source() {
-    let mut source = parse("1.2.3-dev.9.abcdef12");
+    let source = parse("1.2.3-dev.9.abcdef12");
     assert_eq!(
         source.increase_by_scope("prerelease".to_string()),
         parse("1.2.3-dev.10.abcdef12")
@@ -97,8 +97,8 @@ fn prerelease_bump_preserves_stage_sha_and_source() {
 
 #[test]
 fn release_clears_all_prerelease_fields_and_preserves_the_source() {
-    let mut source = parse("1.2.3-dev.9.abcdef12");
-    let mut released = source.release();
+    let source = parse("1.2.3-dev.9.abcdef12");
+    let released = source.release();
     assert_eq!(released, parse("1.2.3"));
     assert_eq!(released.release(), released);
     assert_eq!(source, parse("1.2.3-dev.9.abcdef12"));
@@ -139,7 +139,7 @@ fn parse_official_and_prerelease_versions() {
 
 #[test]
 fn increase_and_release_behaviors() {
-    let mut v = SemanticVersion::from_string("1.2.3-rc.1".to_string()).unwrap();
+    let v = SemanticVersion::from_string("1.2.3-rc.1".to_string()).unwrap();
 
     let minor = v.increase_by_scope("minor".to_string());
     assert_eq!(minor.to_string(false), "1.3.0-rc.1");

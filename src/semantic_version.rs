@@ -69,7 +69,7 @@ impl SemanticVersion {
         self.prerelease_number += 1;
     }
 
-    pub fn increase_by_scope(&mut self, scope: String) -> SemanticVersion {
+    pub fn increase_by_scope(&self, scope: String) -> SemanticVersion {
         let mut increased = self.clone();
 
         match scope.as_str() {
@@ -85,7 +85,7 @@ impl SemanticVersion {
         increased
     }
 
-    pub fn release(&mut self) -> SemanticVersion {
+    pub fn release(&self) -> SemanticVersion {
         let mut release_version = self.clone();
 
         release_version.prerelease_stage = "".to_string();

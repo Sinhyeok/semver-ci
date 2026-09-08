@@ -1,5 +1,4 @@
-use crate::default_error::{DefaultError, Result, ResultExt};
-use crate::error_messages as messages;
+use crate::errors::{messages, DefaultError, Result, ResultExt};
 use std::env;
 
 pub(crate) fn env_var(name: &str) -> Result<String> {

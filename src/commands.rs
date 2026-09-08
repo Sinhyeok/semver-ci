@@ -1,4 +1,4 @@
-use crate::default_error::Result;
+use crate::errors::Result;
 use clap::{Parser, Subcommand};
 use release_command::ReleaseCommandArgs;
 use scope_command::ScopeCommandArgs;

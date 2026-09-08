@@ -1,7 +1,6 @@
-use crate::default_error::{Result, ResultExt};
-use crate::error_messages as messages;
+use crate::errors::{messages, Result, ResultExt};
+use crate::models::Release;
 use crate::pipelines::Pipeline;
-use crate::release::Release;
 use crate::{config, git_service, http_service};
 use log::error;
 use reqwest::header::{HeaderMap, HeaderValue};

@@ -1,5 +1,4 @@
-use crate::default_error::{Result, ResultExt};
-use crate::error_messages as messages;
+use crate::errors::{messages, Result, ResultExt};
 use crate::pipelines::Pipeline;
 use crate::{config, git_service};
 

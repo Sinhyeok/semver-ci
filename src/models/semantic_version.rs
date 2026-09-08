@@ -1,5 +1,4 @@
-use crate::default_error::{DefaultError, Result, ResultExt};
-use crate::error_messages as messages;
+use crate::errors::{messages, DefaultError, Result, ResultExt};
 use std::cmp::Ordering;
 
 /// A parsed version whose equality and total ordering include every field, including SHA.

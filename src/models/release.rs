@@ -1,4 +1,4 @@
-use crate::semantic_version::SemanticVersion;
+use super::SemanticVersion;
 
 pub(crate) struct Release {
     pub(crate) name: String,

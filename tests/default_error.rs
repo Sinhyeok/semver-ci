@@ -1,16 +1,16 @@
+// Load from the source directory so nested modules use their normal file paths.
 #[allow(dead_code)]
-#[path = "../src/default_error.rs"]
-mod default_error;
-#[allow(dead_code)]
-#[path = "../src/error_messages.rs"]
-mod error_messages;
+#[path = "../src"]
+mod source {
+    pub(crate) mod errors;
+}
 
-use default_error::{DefaultError, ResultExt};
+use source::errors::{DefaultError, Result, ResultExt};
 use std::error::Error;
 
 #[test]
 fn report_preserves_every_context_and_the_original_typed_cause() {
-    let result = "bad-number"
+    let result: Result<u64> = "bad-number"
         .parse::<u64>()
         .context("Invalid version component")
         .context("Cannot calculate release");

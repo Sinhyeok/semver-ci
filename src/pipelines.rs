@@ -3,12 +3,11 @@ mod github_actions;
 mod gitlab_ci;
 
 use crate::config;
-use crate::default_error::{DefaultError, Result};
-use crate::error_messages as messages;
+use crate::errors::{messages, DefaultError, Result};
+use crate::models::Release;
 use crate::pipelines::git_repo::GitRepo;
 use crate::pipelines::github_actions::{GithubActions, GITHUB_ACTIONS};
 use crate::pipelines::gitlab_ci::{GitlabCI, GITLAB_CI};
-use crate::release::Release;
 use serde_json::Value;
 use std::collections::HashMap;
 

@@ -299,6 +299,71 @@ fn explicit_values_do_not_need_branch_patterns() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn overridden_patterns_are_not_read_even_when_the_environment_is_not_unicode() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+
+    let repo = repo_with_tags("main", &["v1.2.3", "v1.2.4-rc.1"]);
+    for (args, variables, upcoming) in [
+        (
+            vec!["--scope", "patch"],
+            vec!["MAJOR", "MINOR", "PATCH", "RELEASE"],
+            "v1.2.4",
+        ),
+        (
+            vec!["--stage", "stable"],
+            vec!["DEV", "RC", "STABLE"],
+            "v1.2.4",
+        ),
+        (
+            vec!["--scope", "release"],
+            vec!["MAJOR", "MINOR", "PATCH", "RELEASE", "DEV", "RC", "STABLE"],
+            "v1.2.4",
+        ),
+        (
+            vec!["--stage", "stable", "--candidate", "v1.2.4-rc.1"],
+            vec!["MAJOR", "MINOR", "PATCH", "RELEASE", "DEV", "RC", "STABLE"],
+            "v1.2.4",
+        ),
+    ] {
+        let mut command = repo.command();
+        for variable in variables {
+            command.env(variable, OsString::from_vec(vec![0xff]));
+        }
+        assert_version(&repo, command.arg("version").args(args), upcoming, "v1.2.3");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn stage_errors_are_reported_before_reading_scope_patterns() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+
+    let repo = TestRepo::new("develop");
+    for (args, dev_pattern, expected) in [
+        (vec![], "[", "regex parse error"),
+        (
+            vec!["--candidate", "v1.2.4-rc.1"],
+            "^develop$",
+            "--candidate requires official version calculation",
+        ),
+    ] {
+        repo.command()
+            .env("MAJOR", OsString::from_vec(vec![0xff]))
+            .env("DEV", dev_pattern)
+            .arg("version")
+            .args(args)
+            .assert()
+            .code(1)
+            .stdout("")
+            .stderr(predicate::str::contains(expected))
+            .stderr(predicate::str::contains("environment variable 'MAJOR'").not());
+    }
+}
+
 #[test]
 fn invalid_patterns_needed_for_inference_fail_without_version_outputs() {
     let repo = TestRepo::new("develop");

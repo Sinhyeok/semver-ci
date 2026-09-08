@@ -1,9 +1,6 @@
-use crate::branch_rules::{Scope, Stage};
-use crate::default_error::{DefaultError, Result, ResultExt};
-use crate::error_messages as messages;
+use crate::errors::{messages, DefaultError, Result, ResultExt};
 use crate::git_service;
-use crate::release_target::ReleaseTarget;
-use crate::semantic_version::SemanticVersion;
+use crate::models::{ReleaseTarget, Scope, SemanticVersion, Stage};
 use regex::Regex;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashSet};

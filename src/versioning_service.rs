@@ -75,21 +75,31 @@ fn calculate_prerelease(
     tag_names: &[String],
     last_official: &SemanticVersion,
 ) -> VersionResult {
-    let stage = request.stage.as_str().to_string();
-    let upcoming_official = resolve_next_core(last_official, request.target, request.scope);
+    let stage = request.stage.as_str();
+    let mut upcoming_core = resolve_next_core(last_official, request.target, request.scope);
+    let latest_prerelease = last_tag_by_pattern(
+        tag_names,
+        &format!(
+            r"^v?{}-{}\.[0-9]+.*$",
+            regex::escape(&upcoming_core.to_string(false)),
+            stage
+        ),
+        None,
+    );
+    let last_version = latest_prerelease
+        .as_ref()
+        .unwrap_or(last_official)
+        .to_string(true);
+
+    upcoming_core.prerelease_stage = stage.to_string();
+    let mut upcoming = latest_prerelease
+        .unwrap_or(upcoming_core)
+        .increase_by_scope("prerelease".to_string());
+    upcoming.commit_short_sha = request.short_commit_sha.to_string();
+
     VersionResult {
-        upcoming_version: upcoming_prerelease_version(
-            tag_names,
-            stage.clone(),
-            upcoming_official.clone(),
-            request.short_commit_sha.to_string(),
-        ),
-        last_version: last_prerelease_version(
-            tag_names,
-            stage,
-            last_official.clone(),
-            upcoming_official.to_string(false),
-        ),
+        upcoming_version: upcoming.to_string(true),
+        last_version,
     }
 }
 
@@ -386,52 +396,6 @@ fn validate_candidate_not_released(
         }
     }
     Ok(())
-}
-
-fn upcoming_prerelease_version(
-    tag_names: &[String],
-    prerelease_stage: String,
-    mut upcoming_official_version: SemanticVersion,
-    commit_short_sha: String,
-) -> String {
-    let upcoming_official_version_string = upcoming_official_version.to_string(false);
-    upcoming_official_version
-        .prerelease_stage
-        .clone_from(&prerelease_stage);
-
-    let mut upcoming_prerelease_version = last_tag_by_pattern(
-        tag_names,
-        &format!(
-            r"^v?{}-{}\.[0-9]+.*$",
-            regex::escape(&upcoming_official_version_string),
-            prerelease_stage
-        ),
-        Some(upcoming_official_version),
-    )
-    .unwrap()
-    .increase_by_scope("prerelease".to_string());
-    upcoming_prerelease_version.commit_short_sha = commit_short_sha;
-
-    upcoming_prerelease_version.to_string(true)
-}
-
-fn last_prerelease_version(
-    tag_names: &[String],
-    prerelease_stage: String,
-    last_official_version: SemanticVersion,
-    upcoming_official_version: String,
-) -> String {
-    last_tag_by_pattern(
-        tag_names,
-        &format!(
-            r"^v?{}-{}\.[0-9]+.*$",
-            regex::escape(&upcoming_official_version),
-            prerelease_stage
-        ),
-        Some(last_official_version),
-    )
-    .unwrap()
-    .to_string(true)
 }
 
 fn last_tag_by_pattern(

@@ -2,6 +2,8 @@ use crate::default_error::{DefaultError, Result, ResultExt};
 use crate::error_messages as messages;
 use std::cmp::Ordering;
 
+/// A parsed version whose equality and total ordering include every field, including SHA.
+/// Release selection uses [`Self::cmp_precedence`] to ignore SHA.
 #[derive(Eq, PartialEq, Debug)]
 pub struct SemanticVersion {
     pub major: u64,
@@ -20,12 +22,8 @@ impl PartialOrd for SemanticVersion {
 
 impl Ord for SemanticVersion {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.major
-            .cmp(&other.major)
-            .then_with(|| self.minor.cmp(&other.minor))
-            .then_with(|| self.patch.cmp(&other.patch))
-            .then_with(|| compare_prerelease_stage(&self.prerelease_stage, &other.prerelease_stage))
-            .then_with(|| self.prerelease_number.cmp(&other.prerelease_number))
+        self.cmp_precedence(other)
+            .then_with(|| self.commit_short_sha.cmp(&other.commit_short_sha))
     }
 }
 
@@ -52,6 +50,17 @@ impl Clone for SemanticVersion {
 }
 
 impl SemanticVersion {
+    /// Compare release-selection precedence without considering the commit SHA.
+    /// Distinct versions can have equal precedence; use `Ord` for total ordering.
+    pub fn cmp_precedence(&self, other: &Self) -> Ordering {
+        self.major
+            .cmp(&other.major)
+            .then_with(|| self.minor.cmp(&other.minor))
+            .then_with(|| self.patch.cmp(&other.patch))
+            .then_with(|| compare_prerelease_stage(&self.prerelease_stage, &other.prerelease_stage))
+            .then_with(|| self.prerelease_number.cmp(&other.prerelease_number))
+    }
+
     pub fn increase_by_scope(&self, scope: String) -> Result<SemanticVersion> {
         let mut increased = self.clone();
         let component = match scope.as_str() {

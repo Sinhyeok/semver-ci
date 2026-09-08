@@ -644,7 +644,8 @@ cargo clippy --locked --all-targets --all-features -- -D warnings
 ### Source organization
 
 - `src/models/` owns shared types and their value-level behavior, including
-  version parsing, comparison, increments, and release target validation.
+  version parsing, comparison, increments, release target validation, and
+  original Git tag names with their classification.
 - `src/branch_rules.rs` interprets branches and validates scope, stage, and
   target combinations using supplied values and patterns. It does not read
   environment variables or access Git.

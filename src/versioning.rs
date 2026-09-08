@@ -1,26 +1,11 @@
 use crate::errors::{messages, DefaultError, Result, ResultExt};
 use crate::git_service;
-use crate::models::{ReleaseTarget, Scope, SemanticVersion, Stage};
+use crate::models::{ReleaseTarget, Scope, SemanticVersion, Stage, TagKind, VersionTag};
 use regex::Regex;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashSet};
 
-const SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+)$";
-const SEMANTIC_VERSION_TAG_PRERELEASE_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+-.+)$";
 const PRERELEASE_SELECTION_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+)-(dev|rc)\.[0-9]+.*$";
-
-#[derive(PartialEq, Eq)]
-enum TagKind {
-    Official,
-    Prerelease,
-    Other,
-}
-
-struct VersionTag {
-    name: String,
-    version: SemanticVersion,
-    kind: TagKind,
-}
 
 /// Inputs for version selection, independent of CLI arguments and pipeline types.
 pub(crate) struct VersionRequest<'a> {
@@ -40,7 +25,7 @@ pub(crate) struct VersionResult {
 }
 
 pub(crate) fn calculate(request: VersionRequest<'_>) -> Result<VersionResult> {
-    let all_tags = parse_version_tags(request.tag_names)?;
+    let all_tags = VersionTag::parse_all(request.tag_names)?;
     let reachable_tags = select_reachable_tags(&request, &all_tags)?;
     let last_official = resolve_base(&reachable_tags, request.target)?;
 
@@ -207,34 +192,6 @@ fn resolve_base(
             .filter(|version| target.includes_base(version)),
     )
     .ok_or_else(|| DefaultError::new(messages::no_target_base(&target.version.to_string(true))))
-}
-
-fn parse_version_tags(tag_names: &[String]) -> Result<Vec<VersionTag>> {
-    let official_pattern = Regex::new(SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN).context(
-        messages::invalid_regex(SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN),
-    )?;
-    let prerelease_pattern = Regex::new(SEMANTIC_VERSION_TAG_PRERELEASE_PATTERN).context(
-        messages::invalid_regex(SEMANTIC_VERSION_TAG_PRERELEASE_PATTERN),
-    )?;
-    Ok(tag_names
-        .iter()
-        .filter_map(|name| {
-            let version = SemanticVersion::from_string(name.clone()).ok()?;
-            // Keep name classification separate from the permissive version parser.
-            let kind = if official_pattern.is_match(name) {
-                TagKind::Official
-            } else if prerelease_pattern.is_match(name) {
-                TagKind::Prerelease
-            } else {
-                TagKind::Other
-            };
-            Some(VersionTag {
-                name: name.clone(),
-                version,
-                kind,
-            })
-        })
-        .collect())
 }
 
 fn select_reachable_tags<'a>(

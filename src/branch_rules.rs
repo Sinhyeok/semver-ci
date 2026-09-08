@@ -1,8 +1,8 @@
 use crate::config;
-use crate::default_error::DefaultError;
+use crate::default_error::{DefaultError, Result, ResultExt};
+use crate::error_messages as messages;
 use clap::ValueEnum;
 use regex::Regex;
-use std::error::Error;
 
 // Preserve the legacy scope regexes and their first-match precedence.
 pub(crate) const MAJOR_PATTERN: &str = r"^release/[0-9]+.x.x$";
@@ -56,16 +56,16 @@ pub(crate) struct ScopePatterns {
 }
 
 impl ScopePatterns {
-    fn from_env() -> Self {
-        Self {
-            major: config::env_var_or("MAJOR", MAJOR_PATTERN),
-            minor: config::env_var_or("MINOR", MINOR_PATTERN),
-            patch: config::env_var_or("PATCH", PATCH_PATTERN),
-            release: config::env_var_or("RELEASE", STABLE_PATTERN),
-        }
+    fn from_env() -> Result<Self> {
+        Ok(Self {
+            major: config::env_var_or("MAJOR", MAJOR_PATTERN)?,
+            minor: config::env_var_or("MINOR", MINOR_PATTERN)?,
+            patch: config::env_var_or("PATCH", PATCH_PATTERN)?,
+            release: config::env_var_or("RELEASE", STABLE_PATTERN)?,
+        })
     }
 
-    pub(crate) fn resolve(&self, branch: &str) -> Result<Scope, Box<dyn Error>> {
+    pub(crate) fn resolve(&self, branch: &str) -> Result<Scope> {
         matching_rule(
             branch,
             &[
@@ -75,18 +75,14 @@ impl ScopePatterns {
                 (Scope::Release, &self.release),
             ],
         )?
-        .ok_or_else(|| {
-            policy_error(format!(
-                "Unknown branch name: {branch}. Configure MAJOR/MINOR/PATCH/RELEASE or pass --scope."
-            ))
-        })
+        .ok_or_else(|| DefaultError::new(messages::unknown_branch(branch)))
     }
 }
 
-fn resolve_stage(branch: &str) -> Result<Stage, Box<dyn Error>> {
-    let dev = config::env_var_or("DEV", DEV_PATTERN);
-    let rc = config::env_var_or("RC", RC_PATTERN);
-    let stable = config::env_var_or("STABLE", STABLE_PATTERN);
+fn resolve_stage(branch: &str) -> Result<Stage> {
+    let dev = config::env_var_or("DEV", DEV_PATTERN)?;
+    let rc = config::env_var_or("RC", RC_PATTERN)?;
+    let stable = config::env_var_or("STABLE", STABLE_PATTERN)?;
     matching_rule(
         branch,
         &[
@@ -95,23 +91,21 @@ fn resolve_stage(branch: &str) -> Result<Stage, Box<dyn Error>> {
             (Stage::Stable, &stable),
         ],
     )?
-    .ok_or_else(|| {
-        policy_error(format!(
-            "Unknown stage for branch: {branch}. Configure DEV/RC/STABLE or pass --stage."
-        ))
-    })
+    .ok_or_else(|| DefaultError::new(messages::unknown_stage(branch)))
 }
 
-fn matching_rule<T: Copy>(
-    branch: &str,
-    patterns: &[(T, &str)],
-) -> Result<Option<T>, Box<dyn Error>> {
+fn matching_rule<T: Copy>(branch: &str, patterns: &[(T, &str)]) -> Result<Option<T>> {
     // Validate every configured pattern in the requested dimension before matching,
     // so an early match cannot hide a malformed later rule.
     let rules = patterns
         .iter()
-        .map(|(value, pattern)| Ok((*value, Regex::new(pattern)?)))
-        .collect::<Result<Vec<_>, regex::Error>>()?;
+        .map(|(value, pattern)| {
+            Ok((
+                *value,
+                Regex::new(pattern).context(messages::invalid_regex(pattern))?,
+            ))
+        })
+        .collect::<Result<Vec<_>>>()?;
     Ok(rules
         .into_iter()
         .find(|(_, regex)| regex.is_match(branch))
@@ -124,7 +118,7 @@ pub(crate) fn resolve_policy(
     scope: Option<Scope>,
     stage: Option<Stage>,
     has_candidate: bool,
-) -> Result<(Scope, Stage), Box<dyn Error>> {
+) -> Result<(Scope, Stage)> {
     let stage = match stage {
         Some(stage) => stage,
         // Preserve the existing explicit release scope on any named branch.
@@ -132,36 +126,19 @@ pub(crate) fn resolve_policy(
         None => resolve_stage(branch)?,
     };
     if has_candidate && stage != Stage::Stable {
-        return Err(policy_error(
-            "--candidate requires official version calculation; use --stage stable or --scope release."
-                .to_string(),
-        ));
+        return Err(DefaultError::new(messages::CANDIDATE_STAGE));
     }
 
     let scope = match scope {
         Some(scope) => scope,
         None if has_candidate => Scope::Release,
-        None => ScopePatterns::from_env().resolve(branch)?,
+        None => ScopePatterns::from_env()?.resolve(branch)?,
     };
     if has_candidate && scope != Scope::Release {
-        return Err(policy_error(
-            "--candidate cannot be combined with a major, minor, or patch scope; omit scope or use release."
-                .to_string(),
-        ));
+        return Err(DefaultError::new(messages::CANDIDATE_SCOPE));
     }
     if scope == Scope::Release && stage != Stage::Stable {
-        return Err(policy_error(
-            "scope release requires stage stable; select an increase scope for dev or rc."
-                .to_string(),
-        ));
+        return Err(DefaultError::new(messages::RELEASE_STAGE));
     }
     Ok((scope, stage))
-}
-
-fn policy_error(message: String) -> Box<dyn Error> {
-    DefaultError {
-        message,
-        source: None,
-    }
-    .into()
 }

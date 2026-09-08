@@ -1,3 +1,5 @@
+use crate::default_error::{DefaultError, Result, ResultExt};
+use crate::error_messages as messages;
 use std::cmp::Ordering;
 
 #[derive(Eq, PartialEq, Debug)]
@@ -50,39 +52,26 @@ impl Clone for SemanticVersion {
 }
 
 impl SemanticVersion {
-    fn increase_major(&mut self) {
-        self.major += 1;
-        self.minor = 0;
-        self.patch = 0;
-    }
-
-    fn increase_minor(&mut self) {
-        self.minor += 1;
-        self.patch = 0;
-    }
-
-    fn increase_patch(&mut self) {
-        self.patch += 1;
-    }
-
-    fn increase_prerelease_number(&mut self) {
-        self.prerelease_number += 1;
-    }
-
-    pub fn increase_by_scope(&self, scope: String) -> SemanticVersion {
+    pub fn increase_by_scope(&self, scope: String) -> Result<SemanticVersion> {
         let mut increased = self.clone();
-
-        match scope.as_str() {
-            "major" => increased.increase_major(),
-            "minor" => increased.increase_minor(),
-            "patch" => increased.increase_patch(),
-            "prerelease" => increased.increase_prerelease_number(),
-            _ => {
-                panic!("Invalid scope: {}", scope)
+        let component = match scope.as_str() {
+            "major" => {
+                increased.minor = 0;
+                increased.patch = 0;
+                &mut increased.major
             }
-        }
-
-        increased
+            "minor" => {
+                increased.patch = 0;
+                &mut increased.minor
+            }
+            "patch" => &mut increased.patch,
+            "prerelease" => &mut increased.prerelease_number,
+            _ => return Err(DefaultError::new(messages::invalid_scope(&scope))),
+        };
+        *component = component
+            .checked_add(1)
+            .ok_or_else(|| DefaultError::new(messages::version_overflow(&scope)))?;
+        Ok(increased)
     }
 
     pub fn release(&self) -> SemanticVersion {
@@ -95,7 +84,7 @@ impl SemanticVersion {
         release_version
     }
 
-    pub fn from_string(version_string: String) -> Result<Self, String> {
+    pub fn from_string(version_string: String) -> Result<Self> {
         let prefix_stripped = match version_string.strip_prefix('v') {
             Some(stripped) => stripped.to_string(),
             None => version_string.clone(),
@@ -106,7 +95,9 @@ impl SemanticVersion {
         // version
         let version_parts: Vec<&str> = version_n_metadata[0].split('.').collect();
         if version_parts.len() != 3 {
-            return Err(format!("Invalid version string format: {}", version_string));
+            return Err(DefaultError::new(messages::invalid_version(
+                &version_string,
+            )));
         }
 
         let major = version_part(version_parts[0], "major")?;
@@ -168,24 +159,27 @@ impl SemanticVersion {
     }
 }
 
-fn version_part(part: &str, scope: &str) -> Result<u64, String> {
+fn version_part(part: &str, scope: &str) -> Result<u64> {
     part.parse::<u64>()
-        .map_err(|e| format!("Invalid {} version: {}\n{}", scope, part, e))
+        .context(messages::invalid_version_part(scope, part))
 }
 
-fn metadata(metadata_string: &str) -> Result<(String, u64, String), String> {
+fn metadata(metadata_string: &str) -> Result<(String, u64, String)> {
     let metadata_parts: Vec<&str> = metadata_string.split('.').collect();
     if metadata_parts.len() < 2 {
-        return Err(format!("Invalid metadata format: {}", metadata_string));
+        return Err(DefaultError::new(messages::invalid_metadata(
+            metadata_string,
+        )));
     }
 
     let prerelease_stage = metadata_parts[0].to_string();
-    let prerelease_number = metadata_parts[1].parse::<u64>().map_err(|_| {
-        format!(
-            "Invalid prerelease number: {}, Metadata: {}",
-            metadata_parts[1], metadata_string
-        )
-    })?;
+    let prerelease_number =
+        metadata_parts[1]
+            .parse::<u64>()
+            .context(messages::invalid_prerelease(
+                metadata_parts[1],
+                metadata_string,
+            ))?;
     let short_commit_sha = metadata_parts.get(2).unwrap_or(&"").to_string();
 
     Ok((prerelease_stage, prerelease_number, short_commit_sha))

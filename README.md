@@ -534,6 +534,15 @@ stable, so existing `RELEASE` patterns still work with this composition.
 
 ## Troubleshooting
 
+Application failures print `Error: <context>` and the complete `Caused by:` chain
+to stderr, then exit with code **1**. Version calculation failures do not print
+version assignments to stdout. Invalid CLI arguments retain clap's exit code
+**2** and usage diagnostics.
+
+Missing optional configuration uses its documented default. Invalid values,
+unreadable configuration, malformed `.env` files, and version component overflow
+are reported as errors. A missing `.env` file is allowed.
+
 ### Unknown branches and invalid combinations
 
 For an unmapped branch, configure both scope and stage through
@@ -622,6 +631,21 @@ cargo test --locked --all-features
 cargo fmt --all --check
 cargo clippy --locked --all-targets --all-features -- -D warnings
 ```
+
+### Error handling
+
+Keep application error and recovery messages in `src/error_messages.rs`, using
+constants for fixed text and functions for messages with parameters. Return
+`default_error::Result<T>` from fallible application functions. Create validation
+errors with `DefaultError::new(...)`; use `ResultExt::context(...)` to attach
+operation context to external failures, and propagate existing errors with `?`.
+Preserve original errors through `with_source(...)` rather than converting them
+to strings. `main` prints `report()` once and selects the exit code.
+
+Intentional recovery paths may log `report()` and continue, such as GitLab's
+compare-link fallback. The libgit2 credentials callback requires `git2::Error`,
+so it converts the report at that API boundary. Programmer invariants may use
+`unreachable!`; configuration, I/O, parsing, and arithmetic failures return errors.
 
 ### Build and test containers
 

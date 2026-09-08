@@ -1,4 +1,10 @@
-// Load the production module directly because svci is a binary-only crate.
+// Load the production modules directly because svci is a binary-only crate.
+#[allow(dead_code)]
+#[path = "../src/default_error.rs"]
+mod default_error;
+#[allow(dead_code)]
+#[path = "../src/error_messages.rs"]
+mod error_messages;
 #[path = "../src/semantic_version.rs"]
 mod semantic_version;
 
@@ -40,7 +46,10 @@ fn invalid_versions_report_the_invalid_component() {
         ("1.2.3-rc.18446744073709551616", "Invalid prerelease number"),
     ] {
         let error = SemanticVersion::from_string(input.to_string()).unwrap_err();
-        assert!(error.contains(expected), "input: {input}, error: {error}");
+        assert!(
+            error.to_string().contains(expected),
+            "input: {input}, error: {error}"
+        );
     }
 }
 
@@ -80,7 +89,10 @@ fn ordering_uses_numeric_components_then_prerelease_precedence() {
 fn scope_bumps_reset_lower_components_and_preserve_the_source() {
     for (scope, expected) in [("major", "2.0.0"), ("minor", "1.3.0"), ("patch", "1.2.4")] {
         let source = parse("1.2.3");
-        assert_eq!(source.increase_by_scope(scope.to_string()), parse(expected));
+        assert_eq!(
+            source.increase_by_scope(scope.to_string()).unwrap(),
+            parse(expected)
+        );
         assert_eq!(source, parse("1.2.3"));
     }
 }
@@ -89,7 +101,7 @@ fn scope_bumps_reset_lower_components_and_preserve_the_source() {
 fn prerelease_bump_preserves_stage_sha_and_source() {
     let source = parse("1.2.3-dev.9.abcdef12");
     assert_eq!(
-        source.increase_by_scope("prerelease".to_string()),
+        source.increase_by_scope("prerelease".to_string()).unwrap(),
         parse("1.2.3-dev.10.abcdef12")
     );
     assert_eq!(source, parse("1.2.3-dev.9.abcdef12"));
@@ -105,9 +117,11 @@ fn release_clears_all_prerelease_fields_and_preserves_the_source() {
 }
 
 #[test]
-#[should_panic(expected = "Invalid scope: invalid")]
 fn unsupported_scope_is_rejected() {
-    parse("1.2.3").increase_by_scope("invalid".to_string());
+    let error = parse("1.2.3")
+        .increase_by_scope("invalid".to_string())
+        .unwrap_err();
+    assert_eq!(error.to_string(), "Invalid scope: invalid");
 }
 
 #[test]
@@ -141,15 +155,30 @@ fn parse_official_and_prerelease_versions() {
 fn increase_and_release_behaviors() {
     let v = SemanticVersion::from_string("1.2.3-rc.1".to_string()).unwrap();
 
-    let minor = v.increase_by_scope("minor".to_string());
+    let minor = v.increase_by_scope("minor".to_string()).unwrap();
     assert_eq!(minor.to_string(false), "1.3.0-rc.1");
 
-    let patch = v.increase_by_scope("patch".to_string());
+    let patch = v.increase_by_scope("patch".to_string()).unwrap();
     assert_eq!(patch.to_string(false), "1.2.4-rc.1");
 
-    let pre = v.increase_by_scope("prerelease".to_string());
+    let pre = v.increase_by_scope("prerelease".to_string()).unwrap();
     assert_eq!(pre.to_string(false), "1.2.3-rc.2");
 
     let rel = v.release();
     assert_eq!(rel.to_string(true), "v1.2.3");
+}
+
+#[test]
+fn overflow_returns_an_error_without_changing_the_source() {
+    for (version, scope) in [
+        ("18446744073709551615.2.3", "major"),
+        ("1.18446744073709551615.3", "minor"),
+        ("1.2.18446744073709551615", "patch"),
+        ("1.2.3-rc.18446744073709551615", "prerelease"),
+    ] {
+        let source = parse(version);
+        let error = source.increase_by_scope(scope.to_string()).unwrap_err();
+        assert!(error.to_string().contains("exceeds u64::MAX"), "{error}");
+        assert_eq!(source.to_string(false), version);
+    }
 }

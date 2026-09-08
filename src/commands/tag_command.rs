@@ -1,9 +1,7 @@
-use crate::default_error::DefaultError;
+use crate::default_error::Result;
 use crate::pipelines::PipelineInfo;
 use crate::{config, git_service, pipelines};
 use clap::Args;
-use git2::Repository;
-use std::error::Error;
 
 #[derive(Args)]
 pub(crate) struct TagCommandArgs {
@@ -15,10 +13,10 @@ pub(crate) struct TagCommandArgs {
     strip_prefix_v: bool,
 }
 
-pub(crate) fn run(args: TagCommandArgs) -> Result<(), Box<dyn Error>> {
-    let pipeline = pipelines::current_pipeline();
-    pipeline.init();
-    let pipeline_info = pipeline.info();
+pub(crate) fn run(args: TagCommandArgs) -> Result<()> {
+    let pipeline = pipelines::current_pipeline()?;
+    pipeline.init()?;
+    let pipeline_info = pipeline.info()?;
 
     let mut tag_name = args.tag_name.as_str();
     if args.strip_prefix_v {
@@ -32,12 +30,8 @@ pub(crate) fn run(args: TagCommandArgs) -> Result<(), Box<dyn Error>> {
     tag_and_push(&pipeline_info, tag_name, tag_message)
 }
 
-fn tag_and_push(
-    pipeline_info: &PipelineInfo,
-    tag_name: &str,
-    tag_message: &str,
-) -> Result<(), Box<dyn Error>> {
-    let repo = Repository::open(config::clone_target_path())?;
+fn tag_and_push(pipeline_info: &PipelineInfo, tag_name: &str, tag_message: &str) -> Result<()> {
+    let repo = git_service::open_repository(&config::clone_target_path()?)?;
 
     git_service::tag(
         &repo,
@@ -47,16 +41,10 @@ fn tag_and_push(
         &pipeline_info.git_email,
     )?;
 
-    Ok(git_service::push_tag(
+    git_service::push_tag(
         &repo,
         &pipeline_info.git_username,
         &pipeline_info.git_token,
         tag_name,
     )
-    .map_err(|e| {
-        Box::new(DefaultError {
-            message: "Failed to push tag".to_string(),
-            source: Some(Box::new(e)),
-        })
-    })?)
 }

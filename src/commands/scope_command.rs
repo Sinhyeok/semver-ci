@@ -1,9 +1,9 @@
 use crate::branch_rules::{
     ScopePatterns, MAJOR_PATTERN, MINOR_PATTERN, PATCH_PATTERN, STABLE_PATTERN,
 };
+use crate::default_error::Result;
 use crate::pipelines;
 use clap::Args;
-use std::error::Error;
 
 #[derive(Args)]
 pub(crate) struct ScopeCommandArgs {
@@ -20,14 +20,14 @@ pub(crate) struct ScopeCommandArgs {
     release: String,
 }
 
-pub(crate) fn run(args: ScopeCommandArgs) -> Result<(), Box<dyn Error>> {
-    let pipeline = pipelines::current_pipeline();
+pub(crate) fn run(args: ScopeCommandArgs) -> Result<()> {
+    let pipeline = pipelines::current_pipeline()?;
     let patterns = ScopePatterns {
         major: args.major,
         minor: args.minor,
         patch: args.patch,
         release: args.release,
     };
-    println!("{}", patterns.resolve(&pipeline.branch_name())?.as_str());
+    println!("{}", patterns.resolve(&pipeline.branch_name()?)?.as_str());
     Ok(())
 }

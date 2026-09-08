@@ -641,11 +641,28 @@ cargo fmt --all --check
 cargo clippy --locked --all-targets --all-features -- -D warnings
 ```
 
+### Source organization
+
+- `src/models/` owns shared types and their value-level behavior, including
+  version parsing, comparison, increments, release target validation, and
+  original Git tag names with their classification.
+- `src/branch_rules.rs` interprets branches and validates scope, stage, and
+  target combinations using supplied values and patterns. It does not read
+  environment variables or access Git.
+- `src/commands/` handles CLI/environment precedence and loads only the patterns
+  needed for inference. `src/versioning.rs` calculates versions using
+  Git history and the selected policy.
+- `src/errors/` owns shared application errors and diagnostic messages.
+
+Models do not depend on commands, branch rules, configuration, or I/O services.
+Keep value-level operations on the models; branch interpretation belongs in
+branch rules, and environment reads belong at the command/configuration boundary.
+
 ### Error handling
 
-Keep application error and recovery messages in `src/error_messages.rs`, using
+Keep application error and recovery messages in `src/errors/messages.rs`, using
 constants for fixed text and functions for messages with parameters. Return
-`default_error::Result<T>` from fallible application functions. Create validation
+`errors::Result<T>` from fallible application functions. Create validation
 errors with `DefaultError::new(...)`; use `ResultExt::context(...)` to attach
 operation context to external failures, and propagate existing errors with `?`.
 Preserve original errors through `with_source(...)` rather than converting them

@@ -1,14 +1,14 @@
 // Load the production modules directly because svci is a binary-only crate.
 #[allow(dead_code)]
-#[path = "../src/default_error.rs"]
-mod default_error;
-#[allow(dead_code)]
-#[path = "../src/error_messages.rs"]
-mod error_messages;
-#[path = "../src/semantic_version.rs"]
+#[path = "../src"]
+mod source {
+    pub(crate) mod errors;
+}
+#[path = "../src/models/semantic_version.rs"]
 mod semantic_version;
 
 use semantic_version::SemanticVersion;
+use source::errors;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 

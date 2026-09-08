@@ -1,7 +1,7 @@
 use crate::branch_rules::{
     ScopePatterns, MAJOR_PATTERN, MINOR_PATTERN, PATCH_PATTERN, STABLE_PATTERN,
 };
-use crate::default_error::Result;
+use crate::errors::Result;
 use crate::pipelines;
 use clap::Args;
 

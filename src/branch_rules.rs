@@ -1,7 +1,5 @@
-use crate::config;
-use crate::default_error::{DefaultError, Result, ResultExt};
-use crate::error_messages as messages;
-use clap::ValueEnum;
+use crate::errors::{messages, DefaultError, Result, ResultExt};
+use crate::models::{ReleaseTarget, Scope, Stage};
 use regex::Regex;
 
 // Preserve the legacy scope regexes and their first-match precedence.
@@ -9,44 +7,8 @@ pub(crate) const MAJOR_PATTERN: &str = r"^release/[0-9]+.x.x$";
 pub(crate) const MINOR_PATTERN: &str = r"^(develop|feature/.*|release/[0-9]+.[0-9]+.x)$";
 pub(crate) const PATCH_PATTERN: &str = r"^hotfix/[0-9]+.[0-9]+.[0-9]+$";
 pub(crate) const STABLE_PATTERN: &str = r"^(main|master)$";
-const DEV_PATTERN: &str = r"^(develop|feature/.*)$";
-const RC_PATTERN: &str = r"^(release|hotfix)/.*$";
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
-pub(crate) enum Scope {
-    Major,
-    Minor,
-    Patch,
-    Release,
-}
-
-impl Scope {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::Major => "major",
-            Self::Minor => "minor",
-            Self::Patch => "patch",
-            Self::Release => "release",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
-pub(crate) enum Stage {
-    Dev,
-    Rc,
-    Stable,
-}
-
-impl Stage {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::Dev => "dev",
-            Self::Rc => "rc",
-            Self::Stable => "stable",
-        }
-    }
-}
+pub(crate) const DEV_PATTERN: &str = r"^(develop|feature/.*)$";
+pub(crate) const RC_PATTERN: &str = r"^(release|hotfix)/.*$";
 
 pub(crate) struct ScopePatterns {
     pub major: String,
@@ -56,15 +18,6 @@ pub(crate) struct ScopePatterns {
 }
 
 impl ScopePatterns {
-    fn from_env() -> Result<Self> {
-        Ok(Self {
-            major: config::env_var_or("MAJOR", MAJOR_PATTERN)?,
-            minor: config::env_var_or("MINOR", MINOR_PATTERN)?,
-            patch: config::env_var_or("PATCH", PATCH_PATTERN)?,
-            release: config::env_var_or("RELEASE", STABLE_PATTERN)?,
-        })
-    }
-
     pub(crate) fn resolve(&self, branch: &str) -> Result<Scope> {
         matching_rule(
             branch,
@@ -79,19 +32,24 @@ impl ScopePatterns {
     }
 }
 
-fn resolve_stage(branch: &str) -> Result<Stage> {
-    let dev = config::env_var_or("DEV", DEV_PATTERN)?;
-    let rc = config::env_var_or("RC", RC_PATTERN)?;
-    let stable = config::env_var_or("STABLE", STABLE_PATTERN)?;
-    matching_rule(
-        branch,
-        &[
-            (Stage::Dev, &dev),
-            (Stage::Rc, &rc),
-            (Stage::Stable, &stable),
-        ],
-    )?
-    .ok_or_else(|| DefaultError::new(messages::unknown_stage(branch)))
+pub(crate) struct StagePatterns {
+    pub dev: String,
+    pub rc: String,
+    pub stable: String,
+}
+
+impl StagePatterns {
+    pub(crate) fn resolve(&self, branch: &str) -> Result<Stage> {
+        matching_rule(
+            branch,
+            &[
+                (Stage::Dev, &self.dev),
+                (Stage::Rc, &self.rc),
+                (Stage::Stable, &self.stable),
+            ],
+        )?
+        .ok_or_else(|| DefaultError::new(messages::unknown_stage(branch)))
+    }
 }
 
 fn matching_rule<T: Copy>(branch: &str, patterns: &[(T, &str)]) -> Result<Option<T>> {
@@ -112,33 +70,82 @@ fn matching_rule<T: Copy>(branch: &str, patterns: &[(T, &str)]) -> Result<Option
         .map(|(value, _)| value))
 }
 
-/// CLI/environment values are already selected by clap. Infer only missing values.
-pub(crate) fn resolve_policy(
-    branch: &str,
-    scope: Option<Scope>,
-    stage: Option<Stage>,
-    has_candidate: bool,
-) -> Result<(Scope, Stage)> {
-    let stage = match stage {
-        Some(stage) => stage,
-        // Preserve the existing explicit release scope on any named branch.
-        None if scope == Some(Scope::Release) => Stage::Stable,
-        None => resolve_stage(branch)?,
-    };
+pub(crate) fn validate_stage(stage: Stage, has_candidate: bool) -> Result<()> {
     if has_candidate && stage != Stage::Stable {
         return Err(DefaultError::new(messages::CANDIDATE_STAGE));
     }
+    Ok(())
+}
 
-    let scope = match scope {
-        Some(scope) => scope,
-        None if has_candidate => Scope::Release,
-        None => ScopePatterns::from_env()?.resolve(branch)?,
-    };
+pub(crate) fn validate_scope(scope: Scope, stage: Stage, has_candidate: bool) -> Result<()> {
     if has_candidate && scope != Scope::Release {
         return Err(DefaultError::new(messages::CANDIDATE_SCOPE));
     }
     if scope == Scope::Release && stage != Stage::Stable {
         return Err(DefaultError::new(messages::RELEASE_STAGE));
     }
-    Ok((scope, stage))
+    Ok(())
+}
+
+fn target_from_branch(branch: &str) -> Result<Option<ReleaseTarget>> {
+    let (value, scope) = if let Some(value) = branch.strip_prefix("hotfix/") {
+        (value.to_string(), Scope::Patch)
+    } else if let Some(value) = branch.strip_prefix("release/") {
+        if let Some(major) = value.strip_suffix(".x.x") {
+            (format!("{major}.0.0"), Scope::Major)
+        } else if let Some(minor) = value.strip_suffix(".x") {
+            (format!("{minor}.0"), Scope::Minor)
+        } else {
+            return Err(DefaultError::new(messages::unsupported_target_branch(
+                branch,
+            )));
+        }
+    } else {
+        return Ok(None);
+    };
+    if value.starts_with('v') {
+        return Err(DefaultError::new(messages::unsupported_target_branch(
+            branch,
+        )));
+    }
+    let target =
+        ReleaseTarget::parse(&value).context(messages::unsupported_target_branch(branch))?;
+    if target.scope != scope {
+        return Err(DefaultError::new(messages::unsupported_target_branch(
+            branch,
+        )));
+    }
+    Ok(Some(target))
+}
+
+/// Resolve target constraints separately from configurable scope/stage patterns.
+/// Explicit options may supply a target, but cannot override a branch's target.
+pub(crate) fn resolve_target(
+    branch: &str,
+    explicit: Option<&str>,
+    scope: Scope,
+) -> Result<Option<ReleaseTarget>> {
+    let branch_target = target_from_branch(branch)?;
+    let explicit_target = explicit.map(ReleaseTarget::parse).transpose()?;
+    if let (Some(branch_target), Some(explicit_target)) = (&branch_target, &explicit_target) {
+        if branch_target.version != explicit_target.version {
+            return Err(DefaultError::new(messages::branch_target_conflict(
+                &explicit_target.version.to_string(true),
+                branch,
+                &branch_target.version.to_string(true),
+            )));
+        }
+    }
+    let target = branch_target.or(explicit_target);
+    if let Some(target) = &target {
+        if scope != Scope::Release && scope != target.scope {
+            return Err(DefaultError::new(messages::scope_target_conflict(
+                scope.as_str(),
+                &target.version.to_string(true),
+                branch,
+                target.scope.as_str(),
+            )));
+        }
+    }
+    Ok(target)
 }

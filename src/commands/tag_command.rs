@@ -1,4 +1,4 @@
-use crate::default_error::Result;
+use crate::errors::Result;
 use crate::pipelines::PipelineInfo;
 use crate::{config, git_service, pipelines};
 use clap::Args;

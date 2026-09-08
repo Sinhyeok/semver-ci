@@ -1,6 +1,5 @@
 use crate::config;
-use crate::default_error::{DefaultError, Result, ResultExt};
-use crate::error_messages as messages;
+use crate::errors::{messages, DefaultError, Result, ResultExt};
 use log::info;
 use reqwest::blocking::Response;
 use reqwest::header::HeaderMap;

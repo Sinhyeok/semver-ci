@@ -4,7 +4,7 @@ use crate::branch_rules::{
 };
 use crate::errors::{messages, Result, ResultExt};
 use crate::models::{Scope, Stage};
-use crate::versioning_service::{self, VersionRequest};
+use crate::versioning::{self, VersionRequest};
 use crate::{config, git_service, pipelines};
 use clap::Args;
 
@@ -44,7 +44,7 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<()> {
     )
     .context(messages::RETRIEVE_TAGS)?;
 
-    let versions = versioning_service::calculate(VersionRequest {
+    let versions = versioning::calculate(VersionRequest {
         repo_path: &repo_path,
         target_commit: &pipeline.target_commit()?,
         short_commit_sha: &pipeline_info.short_commit_sha,

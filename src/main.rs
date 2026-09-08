@@ -8,7 +8,7 @@ mod git_service;
 mod http_service;
 mod models;
 mod pipelines;
-mod versioning_service;
+mod versioning;
 
 use errors::{messages, DefaultError, Result, ResultExt};
 use std::process::ExitCode;

@@ -649,7 +649,7 @@ cargo clippy --locked --all-targets --all-features -- -D warnings
   target combinations using supplied values and patterns. It does not read
   environment variables or access Git.
 - `src/commands/` handles CLI/environment precedence and loads only the patterns
-  needed for inference. `src/versioning_service.rs` calculates versions using
+  needed for inference. `src/versioning.rs` calculates versions using
   Git history and the selected policy.
 - `src/errors/` owns shared application errors and diagnostic messages.
 

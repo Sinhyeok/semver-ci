@@ -38,7 +38,8 @@ fn branches_with_no_tags_start_from_zero() {
         ("develop", "v0.1.0-dev.1.{sha}"),
         ("feature/topic", "v0.1.0-dev.1.{sha}"),
         ("release/0.1.x", "v0.1.0-rc.1"),
-        ("hotfix/0.0.1", "v0.1.0-rc.1"),
+        ("release/1.x.x", "v1.0.0-rc.1"),
+        ("hotfix/0.0.1", "v0.0.1-rc.1"),
         ("main", "v0.1.0"),
         ("master", "v0.1.0"),
     ] {
@@ -220,7 +221,7 @@ fn invalid_scope_reports_an_error_without_version_output() {
         .assert()
         .failure()
         .stdout("")
-        .stderr(predicate::str::contains("Invalid scope: invalid"));
+        .stderr(predicate::str::contains("invalid value 'invalid'"));
 }
 
 #[test]

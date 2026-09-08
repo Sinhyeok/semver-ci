@@ -1,3 +1,4 @@
+use crate::branch_rules::{self, Scope, Stage};
 use crate::default_error::DefaultError;
 use crate::versioning_service::{self, VersionRequest};
 use crate::{config, git_service, pipelines};
@@ -6,8 +7,13 @@ use std::error::Error;
 
 #[derive(Args)]
 pub(crate) struct VersionCommandArgs {
-    #[arg(short, long, env, default_value = "minor")]
-    scope: String,
+    /// Version increase or candidate promotion. Inferred from branch rules when omitted.
+    #[arg(short, long, env)]
+    scope: Option<Scope>,
+
+    /// Version stage. Inferred from branch rules when omitted.
+    #[arg(long, env)]
+    stage: Option<Stage>,
 
     /// Promote this exact prerelease tag (official version calculation only).
     #[arg(long, env, value_name = "TAG")]
@@ -19,6 +25,12 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
     pipeline.init();
     let pipeline_info = pipeline.info();
     let repo_path = config::clone_target_path();
+    let (scope, stage) = branch_rules::resolve_policy(
+        &pipeline_info.branch_name,
+        args.scope,
+        args.stage,
+        args.candidate.is_some(),
+    )?;
 
     let tag_names = git_service::tag_names(
         &repo_path,
@@ -35,10 +47,10 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
 
     let versions = versioning_service::calculate(VersionRequest {
         repo_path: &repo_path,
-        branch_name: &pipeline_info.branch_name,
         target_commit: &pipeline.target_commit(),
         short_commit_sha: &pipeline_info.short_commit_sha,
-        scope: &args.scope,
+        scope,
+        stage,
         candidate: args.candidate.as_deref(),
         tag_names: &tag_names,
     })?;

@@ -1,5 +1,6 @@
 extern crate core;
 
+mod branch_rules;
 mod commands;
 mod config;
 mod default_error;

@@ -192,15 +192,21 @@ to `1.2`. See [custom branch patterns](#custom-branch-patterns) for the exact ru
 
 ### Dev and RC versions
 
-Prerelease calculation starts from the highest official version among all
-available tags, including tags outside the current branch's history. It applies
-the resolved bump scope, then increments the highest prerelease number for that
-core version and stage. The number starts at `1` when no matching prerelease exists.
+Prerelease calculation starts from the highest official tag at the target commit
+or one of its ancestors. The target is local `HEAD`, `GITHUB_SHA` in GitHub Actions,
+or `CI_COMMIT_SHA` in GitLab CI. It applies the resolved bump scope, then increments
+the highest reachable prerelease number for that core version and stage. Tags
+outside the target's history do not affect the version or prerelease number.
+The number starts at `1` when no matching reachable prerelease exists.
 Dev versions also include the target commit's short SHA.
+
+For example, when `develop` includes `v1.2.3` and an unmerged release branch has
+`v2.0.0`, `develop` still calculates `v1.3.0-dev.N.SHA`. Once the `v2.0.0` commit
+is merged into `develop`, it calculates `v2.1.0-dev.N.SHA`.
 
 For example, with official `v1.2.3` and candidate `v1.3.0-rc.2`, scope `minor`
 and stage `rc` produce `v1.3.0-rc.3`. Dev and RC counters are independent.
-With no official tags, the base is `v0.0.0`.
+With no reachable official tags, the base is `v0.0.0`.
 
 ### Stable versions and promotion
 
@@ -262,7 +268,7 @@ LAST_VERSION=v1.3.0-rc.2
 | Output | Dev / RC | Stable |
 | --- | --- | --- |
 | `UPCOMING_VERSION` | The next prerelease for the resolved scope and stage. | The bumped or promoted official version. |
-| `LAST_VERSION` | The highest existing prerelease for the calculated core version and stage, or the highest official version if none matches. | The highest official version in the target's history. |
+| `LAST_VERSION` | The highest reachable prerelease for the calculated core version and stage, or the highest reachable official version if none matches. | The highest official version in the target's history. |
 
 When no previous version applies, `LAST_VERSION` is `v0.0.0`.
 Diagnostics go to standard error, so CI jobs can capture standard output directly.
@@ -479,7 +485,7 @@ version outputs.
 
 ### Shallow clones and missing tags
 
-Stable calculation requires full history. Use `GIT_DEPTH: "0"` in GitLab CI or
+All version calculation requires full history. Use `GIT_DEPTH: "0"` in GitLab CI or
 `fetch-depth: 0` with `actions/checkout`. Semver-CI's internal GitHub Actions clone
 fetches full history when it creates the checkout itself.
 

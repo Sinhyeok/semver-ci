@@ -537,3 +537,179 @@ fn explicit_candidate_still_requires_complete_history_for_last_version() {
         .stdout("")
         .stderr(predicate::str::contains("requires complete history"));
 }
+
+#[test]
+fn prerelease_base_ignores_unmerged_official_tags_and_advances_after_merge() {
+    for annotated in [false, true] {
+        for (branch, core, stage) in [
+            ("develop", "1.3.0", "dev"),
+            ("feature/topic", "1.3.0", "dev"),
+            ("release/1.3.x", "1.3.0", "rc"),
+            ("hotfix/1.2.4", "1.2.4", "rc"),
+        ] {
+            let repo = released_repo();
+            let base = head(&repo.repo);
+            let target = commit(&repo.repo, branch, "current work", &[base]);
+            let future = commit(&repo.repo, "future", "separate release", &[base]);
+            tag(&repo.repo, "2.0.0", future, annotated);
+            repo.repo.set_head(&format!("refs/heads/{branch}")).unwrap();
+
+            let suffix = if stage == "dev" {
+                format!(".{}", &target.to_string()[..8])
+            } else {
+                String::new()
+            };
+            assert_official(
+                repo.command().arg("version"),
+                &format!("v{core}-{stage}.1{suffix}"),
+                "v1.2.3",
+            );
+
+            if stage == "dev" {
+                let merged = commit(&repo.repo, branch, "merge release", &[target, future]);
+                assert_official(
+                    repo.command().arg("version"),
+                    &format!("v2.1.0-dev.1.{}", &merged.to_string()[..8]),
+                    "v2.0.0",
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn prerelease_counters_and_last_version_follow_target_history() {
+    let repo = released_repo();
+    let base = head(&repo.repo);
+    let target = commit(&repo.repo, "develop", "development", &[base]);
+    let future = commit(&repo.repo, "future", "separate release", &[base]);
+    for name in ["v2.0.0", "v2.1.0-dev.99.abcdef12", "v2.1.0-rc.99"] {
+        tag(&repo.repo, name, future, false);
+    }
+    let candidate = commit(&repo.repo, "candidate", "unmerged prereleases", &[base]);
+    tag(&repo.repo, "v1.3.0-dev.10.abcdef12", candidate, true);
+    tag(&repo.repo, "v1.3.0-rc.7", candidate, true);
+    repo.repo.set_head("refs/heads/develop").unwrap();
+    assert_official(
+        repo.command().arg("version"),
+        &format!("v1.3.0-dev.1.{}", &target.to_string()[..8]),
+        "v1.2.3",
+    );
+    assert_official(
+        repo.command().args(["version", "--stage", "rc"]),
+        "v1.3.0-rc.1",
+        "v1.2.3",
+    );
+
+    tag(&repo.repo, "v1.3.0-dev.2.abcdef12", target, false);
+    tag(&repo.repo, "v1.3.0-rc.3", target, false);
+    assert_official(
+        repo.command().arg("version"),
+        &format!("v1.3.0-dev.3.{}", &target.to_string()[..8]),
+        "v1.3.0-dev.2.abcdef12",
+    );
+    assert_official(
+        repo.command().args(["version", "--stage", "rc"]),
+        "v1.3.0-rc.4",
+        "v1.3.0-rc.3",
+    );
+
+    let merged = commit(
+        &repo.repo,
+        "develop",
+        "merge prereleases",
+        &[target, candidate],
+    );
+    assert_official(
+        repo.command().arg("version"),
+        &format!("v1.3.0-dev.11.{}", &merged.to_string()[..8]),
+        "v1.3.0-dev.10.abcdef12",
+    );
+    assert_official(
+        repo.command().args(["version", "--stage", "rc"]),
+        "v1.3.0-rc.8",
+        "v1.3.0-rc.7",
+    );
+}
+
+#[test]
+fn prerelease_base_defaults_to_zero_when_no_official_tag_is_reachable() {
+    let repo = TestRepo::new("develop");
+    let target = head(&repo.repo);
+    let future = commit(&repo.repo, "future", "separate release", &[target]);
+    tag(&repo.repo, "v2.0.0", future, false);
+    tag(&repo.repo, "v0.1.0-dev.99.abcdef12", future, false);
+    tag(&repo.repo, "v0.1.0-rc.99", future, false);
+    assert_official(
+        repo.command().arg("version"),
+        &format!("v0.1.0-dev.1.{}", &target.to_string()[..8]),
+        "v0.0.0",
+    );
+    assert_official(
+        repo.command().args(["version", "--stage", "rc"]),
+        "v0.1.0-rc.1",
+        "v0.0.0",
+    );
+}
+
+#[test]
+fn prerelease_base_requires_complete_history_even_when_tag_objects_exist() {
+    let repo = released_repo();
+    let target = commit(&repo.repo, "develop", "development", &[head(&repo.repo)]);
+    repo.repo.set_head("refs/heads/develop").unwrap();
+    std::fs::write(repo.repo.path().join("shallow"), format!("{target}\n")).unwrap();
+    for stage in ["dev", "rc"] {
+        repo.command()
+            .args(["version", "--stage", stage])
+            .assert()
+            .failure()
+            .stdout("")
+            .stderr(predicate::str::contains("requires complete history"));
+    }
+}
+
+#[test]
+fn ci_prerelease_versions_use_the_event_history_instead_of_a_newer_checkout() {
+    for github in [false, true] {
+        let repo = released_repo();
+        let target = commit(&repo.repo, "main", "development event", &[head(&repo.repo)]);
+        tag(&repo.repo, "v1.3.0-dev.2.abcdef12", target, false);
+        tag(&repo.repo, "v1.3.0-rc.3", target, false);
+        let newer = commit(&repo.repo, "main", "newer release", &[target]);
+        tag(&repo.repo, "v2.0.0", newer, true);
+        tag(&repo.repo, "v1.3.0-dev.10.abcdef12", newer, true);
+        tag(&repo.repo, "v1.3.0-rc.7", newer, true);
+        repo.repo
+            .remote("origin", repo.repo.path().to_str().unwrap())
+            .unwrap();
+        let branch_variable = if github {
+            "GITHUB_REF_NAME"
+        } else {
+            "CI_COMMIT_REF_NAME"
+        };
+
+        assert_official(
+            ci_command(&repo, github, &target.to_string()).env(branch_variable, "develop"),
+            &format!("v1.3.0-dev.3.{}", &target.to_string()[..8]),
+            "v1.3.0-dev.2.abcdef12",
+        );
+        assert_official(
+            ci_command(&repo, github, &target.to_string())
+                .env(branch_variable, "develop")
+                .args(["--stage", "rc"]),
+            "v1.3.0-rc.4",
+            "v1.3.0-rc.3",
+        );
+        for stage in ["dev", "rc"] {
+            ci_command(&repo, github, "1111111111111111111111111111111111111111")
+                .env(branch_variable, "develop")
+                .args(["--stage", stage])
+                .assert()
+                .failure()
+                .stdout("")
+                .stderr(predicate::str::contains(
+                    "1111111111111111111111111111111111111111",
+                ));
+        }
+    }
+}

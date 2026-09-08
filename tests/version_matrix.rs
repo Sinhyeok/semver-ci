@@ -226,10 +226,20 @@ fn invalid_scope_reports_an_error_without_version_output() {
 
 #[test]
 fn forced_fetch_uses_tags_from_a_local_origin() {
-    let origin = repo_with_tags("main", &["v1.9.0"]);
     let repo = repo_with_tags("develop", &["v1.2.3"]);
+    // Share actual history so the fetched official tag is reachable from HEAD.
+    let origin_dir = tempfile::tempdir().unwrap();
+    let origin = git2::Repository::clone(
+        repo.repo.workdir().unwrap().to_str().unwrap(),
+        origin_dir.path(),
+    )
+    .unwrap();
+    let origin_head = origin.head().unwrap().peel_to_commit().unwrap();
+    origin
+        .tag_lightweight("v1.9.0", origin_head.as_object(), false)
+        .unwrap();
     repo.repo
-        .remote("origin", origin.repo.path().to_str().unwrap())
+        .remote("origin", origin_dir.path().to_str().unwrap())
         .unwrap();
     assert_version(
         &repo,

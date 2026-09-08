@@ -82,18 +82,15 @@ fn select_version_tags(
     request: &VersionRequest<'_>,
     is_official: bool,
 ) -> Result<Vec<String>, Box<dyn Error>> {
-    if !is_official {
-        return Ok(request.tag_names.to_vec());
-    }
-
-    // Only automatic promotion needs candidate ancestry. Explicit promotion and
-    // stable bumps use target history to select the previous official version.
-    let infer_candidate = request.scope == Scope::Release && request.candidate.is_none();
+    // Version inference uses the target's history for both official bases and
+    // prereleases. Stable bumps and explicit promotion only need official bases.
+    let include_prereleases =
+        !is_official || (request.scope == Scope::Release && request.candidate.is_none());
     let official_pattern = Regex::new(SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN).unwrap();
     let selection_tags: Vec<_> = request
         .tag_names
         .iter()
-        .filter(|tag| infer_candidate || official_pattern.is_match(tag))
+        .filter(|tag| include_prereleases || official_pattern.is_match(tag))
         .filter(|tag| SemanticVersion::from_string((*tag).clone()).is_ok())
         .cloned()
         .collect();

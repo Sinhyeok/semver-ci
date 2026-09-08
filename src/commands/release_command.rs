@@ -1,7 +1,7 @@
+use crate::default_error::Result;
 use crate::pipelines;
 use crate::release::Release;
 use clap::Args;
-use std::error::Error;
 
 #[derive(Args)]
 pub(crate) struct ReleaseCommandArgs {
@@ -34,7 +34,7 @@ pub(crate) struct ReleaseCommandArgs {
     strip_prefix_v: bool,
 }
 
-pub(crate) fn run(args: ReleaseCommandArgs) -> Result<(), Box<dyn Error>> {
+pub(crate) fn run(args: ReleaseCommandArgs) -> Result<()> {
     let mut name = args.name.as_str();
     let mut tag_name = args.tag_name.as_deref().unwrap_or(name);
     if args.strip_prefix_v {
@@ -51,7 +51,7 @@ pub(crate) fn run(args: ReleaseCommandArgs) -> Result<(), Box<dyn Error>> {
         previous_tag: args.previous_tag,
     };
 
-    let pipeline = pipelines::current_pipeline();
+    let pipeline = pipelines::current_pipeline()?;
     let parsed = pipeline.create_release(&release)?;
 
     println!("{:#?}", parsed);

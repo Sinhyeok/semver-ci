@@ -1,4 +1,5 @@
-use assert_cmd::Command;
+use assert_cmd::{assert::Assert, Command};
+use predicates::prelude::*;
 use serde_json::Value;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
@@ -15,54 +16,89 @@ enum Provider {
 const PROVIDERS: [Provider; 2] = [Provider::GitHub, Provider::GitLab];
 
 fn release_request(provider: Provider, args: &[&str], environment: &[(&str, &str)]) -> Value {
+    let (result, body) = release_response(provider, args, environment,
+        "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}");
+    result.success();
+    body
+}
+
+fn release_response(
+    provider: Provider,
+    args: &[&str],
+    environment: &[(&str, &str)],
+    response: &str,
+) -> (Assert, Value) {
+    release_responses(provider, args, environment, &[response])
+}
+
+fn release_responses(
+    provider: Provider,
+    args: &[&str],
+    environment: &[(&str, &str)],
+    responses: &[&str],
+) -> (Assert, Value) {
+    let responses: Vec<_> = responses
+        .iter()
+        .map(|response| response.to_string())
+        .collect();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
     let api_url = format!("http://{}", listener.local_addr().unwrap());
     let server = thread::spawn(move || {
-        let deadline = Instant::now() + Duration::from_secs(10);
-        let mut stream = loop {
-            match listener.accept() {
-                Ok((stream, _)) => break stream,
-                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                    assert!(Instant::now() < deadline, "No release request received");
-                    thread::sleep(Duration::from_millis(10));
+        let mut requests = Vec::new();
+        for response in responses {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            let mut stream = loop {
+                match listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        assert!(Instant::now() < deadline, "No release request received");
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(error) => panic!("Failed to accept release request: {error}"),
                 }
-                Err(error) => panic!("Failed to accept release request: {error}"),
+            };
+            stream.set_nonblocking(false).unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            stream
+                .set_write_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut reader = BufReader::new(&mut stream);
+            let mut request_line = String::new();
+            reader.read_line(&mut request_line).unwrap();
+            let mut content_length = None;
+            loop {
+                let mut line = String::new();
+                assert_ne!(reader.read_line(&mut line).unwrap(), 0);
+                if line == "\r\n" {
+                    break;
+                }
+                let (name, value) = line.split_once(':').unwrap();
+                if name.eq_ignore_ascii_case("content-length") {
+                    content_length = Some(value.trim().parse::<usize>().unwrap());
+                }
             }
-        };
-        stream.set_nonblocking(false).unwrap();
-        stream
-            .set_read_timeout(Some(Duration::from_secs(5)))
-            .unwrap();
-        stream
-            .set_write_timeout(Some(Duration::from_secs(5)))
-            .unwrap();
-        let mut reader = BufReader::new(&mut stream);
-        let mut request_line = String::new();
-        reader.read_line(&mut request_line).unwrap();
-        let mut content_length = None;
-        loop {
-            let mut line = String::new();
-            assert_ne!(reader.read_line(&mut line).unwrap(), 0);
-            if line == "\r\n" {
-                break;
-            }
-            let (name, value) = line.split_once(':').unwrap();
-            if name.eq_ignore_ascii_case("content-length") {
-                content_length = Some(value.trim().parse::<usize>().unwrap());
-            }
+            let body_len = if request_line.starts_with("POST ") {
+                content_length.expect("JSON request has Content-Length")
+            } else {
+                assert!(request_line.starts_with("GET /api/v4/projects/123/repository/compare?"));
+                content_length.unwrap_or(0)
+            };
+            let mut body = vec![0; body_len];
+            reader.read_exact(&mut body).unwrap();
+            stream.write_all(response.as_bytes()).unwrap();
+            requests.push((
+                request_line,
+                if body.is_empty() {
+                    Value::Null
+                } else {
+                    serde_json::from_slice::<Value>(&body).unwrap()
+                },
+            ));
         }
-        let mut body = vec![0; content_length.expect("JSON request has Content-Length")];
-        reader.read_exact(&mut body).unwrap();
-        stream
-            .write_all(
-                b"HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
-            )
-            .unwrap();
-        (
-            request_line,
-            serde_json::from_slice::<Value>(&body).unwrap(),
-        )
+        requests.pop().unwrap()
     });
 
     let dir = TempDir::new().unwrap();
@@ -102,9 +138,8 @@ fn release_request(provider: Provider, args: &[&str], environment: &[(&str, &str
         .args(args);
     let result = command.assert();
     let (request_line, body) = server.join().unwrap();
-    result.success();
     assert_eq!(request_line, format!("POST {path} HTTP/1.1\r\n"));
-    body
+    (result, body)
 }
 
 #[test]
@@ -286,4 +321,70 @@ fn github_release_preserves_other_tags_as_full_releases() {
         assert_eq!(body["tag_name"], tag);
         assert_eq!(body["prerelease"], false, "{tag}");
     }
+}
+
+#[test]
+fn http_failures_report_context_without_panicking_or_success_output() {
+    for provider in PROVIDERS {
+        for (response, expected, cause) in [
+            (
+                "HTTP/1.1 403 Forbidden\r\nContent-Length: 6\r\nConnection: close\r\n\r\ndenied",
+                "Status: 403 Forbidden",
+                Some("Body:\ndenied"),
+            ),
+            (
+                "HTTP/1.1 201 Created\r\nContent-Length: 8\r\nConnection: close\r\n\r\nnot-json",
+                "Failed to parse HTTP response as a JSON object",
+                Some("expected ident"),
+            ),
+            (
+                "HTTP/1.1 201 Created\r\nContent-Length: 2\r\nConnection: close\r\n\r\n[]",
+                "Failed to parse HTTP response as a JSON object",
+                Some("invalid type"),
+            ),
+            (
+                "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 100\r\nConnection: close\r\n\r\nshort",
+                "Failed to read HTTP response body (Status: 500 Internal Server Error)",
+                Some("Caused by:"),
+            ),
+        ] {
+            let (result, _) = release_response(provider, &["v1.2.3"], &[], response);
+            let result = result.code(1).stdout("")
+                .stderr(predicate::str::contains("Error: "))
+                .stderr(predicate::str::contains(expected))
+                .stderr(predicate::str::contains("panicked at").not());
+            if let Some(cause) = cause {
+                result.stderr(predicate::str::contains(cause));
+            }
+        }
+    }
+}
+
+#[test]
+fn gitlab_compare_failure_preserves_release_creation_and_reports_its_cause() {
+    let (result, body) = release_responses(
+        Provider::GitLab,
+        &[
+            "release-name",
+            "--generate-release-notes",
+            "--previous-tag",
+            "v1.2.2",
+        ],
+        &[("CI_PROJECT_URL", "https://example.com/test/repo")],
+        &[
+            "HTTP/1.1 200 OK\r\nContent-Length: 8\r\nConnection: close\r\n\r\nnot-json",
+            "HTTP/1.1 201 Created\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+        ],
+    );
+    result
+        .success()
+        .stderr(predicate::str::contains(
+            "Failed to parse HTTP response as a JSON object",
+        ))
+        .stderr(predicate::str::contains("Caused by: expected ident"))
+        .stderr(predicate::str::contains("panicked at").not());
+    assert_eq!(
+        body["description"],
+        "# What's Changed\nhttps://example.com/test/repo/-/compare/v1.2.2...test-sha"
+    );
 }

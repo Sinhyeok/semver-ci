@@ -1,9 +1,9 @@
 use crate::branch_rules::{self, Scope, Stage};
-use crate::default_error::DefaultError;
+use crate::default_error::{Result, ResultExt};
+use crate::error_messages as messages;
 use crate::versioning_service::{self, VersionRequest};
 use crate::{config, git_service, pipelines, release_target};
 use clap::Args;
-use std::error::Error;
 
 #[derive(Args)]
 pub(crate) struct VersionCommandArgs {
@@ -24,11 +24,11 @@ pub(crate) struct VersionCommandArgs {
     target: Option<String>,
 }
 
-pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
-    let pipeline = pipelines::current_pipeline();
-    pipeline.init();
-    let pipeline_info = pipeline.info();
-    let repo_path = config::clone_target_path();
+pub(crate) fn run(args: VersionCommandArgs) -> Result<()> {
+    let pipeline = pipelines::current_pipeline()?;
+    pipeline.init()?;
+    let pipeline_info = pipeline.info()?;
+    let repo_path = config::clone_target_path()?;
     let (scope, stage) = branch_rules::resolve_policy(
         &pipeline_info.branch_name,
         args.scope,
@@ -44,16 +44,11 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<(), Box<dyn Error>> {
         &pipeline_info.git_username,
         &pipeline_info.git_token,
     )
-    .map_err(|e| {
-        Box::new(DefaultError {
-            message: "Failed to retrieve tags".to_string(),
-            source: Some(Box::new(e)),
-        })
-    })?;
+    .context(messages::RETRIEVE_TAGS)?;
 
     let versions = versioning_service::calculate(VersionRequest {
         repo_path: &repo_path,
-        target_commit: &pipeline.target_commit(),
+        target_commit: &pipeline.target_commit()?,
         short_commit_sha: &pipeline_info.short_commit_sha,
         scope,
         stage,

@@ -32,73 +32,77 @@ pub(crate) struct VersionResult {
 }
 
 pub(crate) fn calculate(request: VersionRequest<'_>) -> Result<VersionResult, Box<dyn Error>> {
-    let is_official = request.stage == Stage::Stable;
-    let tag_names = select_version_tags(&request, is_official)?;
-    let mut last_official = select_last_official(&tag_names, request.target)?;
+    let tag_names = select_version_tags(&request, request.stage == Stage::Stable)?;
+    let last_official = select_last_official(&tag_names, request.target)?;
 
     if let Some(target) = request.target {
         validate_target(target, &last_official, request.tag_names)?;
     }
 
-    if is_official {
-        let upcoming_version = if let Some(candidate) = request.candidate {
-            explicit_official_version(
-                request.repo_path,
-                candidate,
-                request.tag_names,
-                &last_official,
-            )?
-        } else if request.scope == Scope::Release {
-            if let Some(target) = request.target {
-                let candidates = collect_official_candidates(&tag_names, &last_official);
-                select_official_candidate(&candidates)?.ok_or_else(|| {
-                    target_error(format!(
-                        "No reachable prerelease for target {}. Select an exact --candidate, or use --scope {} --stage stable to calculate the target directly.",
-                        target.version.to_string(true), target.scope.as_str()
-                    ))
-                })?
-            } else {
-                upcoming_official_version(&tag_names, &last_official)?
-            }
-        } else if let Some(target) = request.target {
-            target.version.to_string(true)
-        } else {
-            last_official
-                .increase_by_scope(request.scope.as_str().to_string())
-                .to_string(true)
-        };
-        if let Some(target) = request.target {
-            if upcoming_version != target.version.to_string(true) {
-                return Err(target_error(format!(
-                    "Candidate version {upcoming_version} conflicts with target {}.",
-                    target.version.to_string(true)
-                )));
-            }
+    match request.stage {
+        Stage::Stable => calculate_stable(&request, &tag_names, &last_official),
+        Stage::Dev | Stage::Rc => Ok(calculate_prerelease(&request, &tag_names, &last_official)),
+    }
+}
+
+fn calculate_stable(
+    request: &VersionRequest<'_>,
+    tag_names: &[String],
+    last_official: &SemanticVersion,
+) -> Result<VersionResult, Box<dyn Error>> {
+    let upcoming_version = match (request.candidate, request.scope) {
+        (Some(candidate), _) => promote_explicit_candidate(
+            request.repo_path,
+            candidate,
+            request.tag_names,
+            last_official,
+        )?,
+        (None, Scope::Release) => {
+            promote_reachable_candidate(tag_names, last_official, request.target)?
         }
-        Ok(VersionResult {
-            upcoming_version,
-            last_version: last_official.to_string(true),
-        })
-    } else {
-        let stage = request.stage.as_str().to_string();
-        let upcoming_official = match request.target {
-            Some(target) => target.version.clone(),
-            None => last_official.increase_by_scope(request.scope.as_str().to_string()),
-        };
-        Ok(VersionResult {
-            upcoming_version: upcoming_prerelease_version(
-                &tag_names,
-                stage.clone(),
-                upcoming_official.clone(),
-                request.short_commit_sha.to_string(),
-            ),
-            last_version: last_prerelease_version(
-                &tag_names,
-                stage,
-                last_official,
-                upcoming_official.to_string(false),
-            ),
-        })
+        (None, scope) => resolve_next_core(last_official, request.target, scope).to_string(true),
+    };
+    validate_result_target(request.target, &upcoming_version)?;
+
+    Ok(VersionResult {
+        upcoming_version,
+        last_version: last_official.to_string(true),
+    })
+}
+
+fn calculate_prerelease(
+    request: &VersionRequest<'_>,
+    tag_names: &[String],
+    last_official: &SemanticVersion,
+) -> VersionResult {
+    let stage = request.stage.as_str().to_string();
+    let upcoming_official = resolve_next_core(last_official, request.target, request.scope);
+    VersionResult {
+        upcoming_version: upcoming_prerelease_version(
+            tag_names,
+            stage.clone(),
+            upcoming_official.clone(),
+            request.short_commit_sha.to_string(),
+        ),
+        last_version: last_prerelease_version(
+            tag_names,
+            stage,
+            last_official.clone(),
+            upcoming_official.to_string(false),
+        ),
+    }
+}
+
+fn resolve_next_core(
+    last_official: &SemanticVersion,
+    target: Option<&ReleaseTarget>,
+    scope: Scope,
+) -> SemanticVersion {
+    match target {
+        Some(target) => target.version.clone(),
+        None => last_official
+            .clone()
+            .increase_by_scope(scope.as_str().to_string()),
     }
 }
 
@@ -130,6 +134,22 @@ fn validate_target(
                 target.version.to_string(true)
             )));
         }
+    }
+    Ok(())
+}
+
+fn validate_result_target(
+    target: Option<&ReleaseTarget>,
+    upcoming_version: &str,
+) -> Result<(), Box<dyn Error>> {
+    let Some(target) = target else {
+        return Ok(());
+    };
+    if upcoming_version != target.version.to_string(true) {
+        return Err(target_error(format!(
+            "Candidate version {upcoming_version} conflicts with target {}.",
+            target.version.to_string(true)
+        )));
     }
     Ok(())
 }
@@ -196,14 +216,19 @@ fn select_version_tags(
     )?)
 }
 
-fn upcoming_official_version(
+fn promote_reachable_candidate(
     tag_names: &[String],
     last_official_version: &SemanticVersion,
+    target: Option<&ReleaseTarget>,
 ) -> Result<String, Box<dyn Error>> {
     let candidates = collect_official_candidates(tag_names, last_official_version);
-    match select_official_candidate(&candidates)? {
-        Some(version) => Ok(version),
-        None => Ok(minor_fallback_version(last_official_version)),
+    match (select_official_candidate(&candidates)?, target) {
+        (Some(version), _) => Ok(version),
+        (None, Some(target)) => Err(target_error(format!(
+            "No reachable prerelease for target {}. Select an exact --candidate, or use --scope {} --stage stable to calculate the target directly.",
+            target.version.to_string(true), target.scope.as_str()
+        ))),
+        (None, None) => Ok(minor_fallback_version(last_official_version)),
     }
 }
 
@@ -265,7 +290,7 @@ fn minor_fallback_version(last_official_version: &SemanticVersion) -> String {
         .to_string(true)
 }
 
-fn explicit_official_version(
+fn promote_explicit_candidate(
     repo_path: &str,
     candidate: &str,
     all_tag_names: &[String],

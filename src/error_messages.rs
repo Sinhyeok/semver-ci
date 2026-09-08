@@ -180,6 +180,10 @@ pub(crate) fn target_released(target: &str, tag: &str) -> String {
     format!("Target {target} is already released as tag '{tag}'. Select a new target.")
 }
 
+pub(crate) fn upcoming_version_exists(version: &str, tag: &str) -> String {
+    format!("Upcoming version {version} already exists as tag '{tag}'. Check the release history and version options.")
+}
+
 pub(crate) fn candidate_target_conflict(candidate: &str, target: &str) -> String {
     format!("Candidate version {candidate} conflicts with target {target}.")
 }

@@ -312,6 +312,14 @@ Invalid candidates fail without version outputs or a minor fallback.
 
 ### Version outputs
 
+Before printing outputs, every stage checks the final `UPCOMING_VERSION` against
+all available repository tags, including tags outside the target commit's history.
+The check compares the full version, including the SHA for dev versions, and treats
+tags with and without the `v` prefix as equivalent. A collision fails with the
+existing tag's name and no version outputs; it does not select another candidate
+or increment the version again. Base selection and prerelease counters still use
+only reachable tags. Existing target and explicit-candidate checks also apply.
+
 `version` writes two `KEY=value` lines to standard output:
 
 ```text
@@ -572,7 +580,8 @@ git fetch --unshallow --tags
 
 For a complete local clone with stale tags, run `git fetch --tags` or set
 `FORCE_FETCH_TAGS=true`. All version tags must be available to select prerelease
-numbers and check whether an explicit candidate or target has already been released.
+numbers, detect a duplicate upcoming version, and check whether an explicit
+candidate or target has already been released.
 
 ### Multiple candidates, squash merges, and rebases
 

@@ -51,10 +51,30 @@ pub(crate) fn calculate(request: VersionRequest<'_>) -> Result<VersionResult> {
         validate_target(target, &last_official, &all_tags)?;
     }
 
-    match request.stage {
+    let result = match request.stage {
         Stage::Stable => calculate_stable(&request, &reachable_tags, &all_tags, &last_official),
         Stage::Dev | Stage::Rc => calculate_prerelease(&request, &reachable_tags, &last_official),
+    }?;
+    validate_upcoming_version(&result.upcoming_version, request.tag_names)?;
+    Ok(result)
+}
+
+fn validate_upcoming_version(upcoming_version: &str, tag_names: &[String]) -> Result<()> {
+    let version = upcoming_version
+        .strip_prefix('v')
+        .unwrap_or(upcoming_version);
+    // Compare full names: version ordering ignores dev SHAs, and parsing can
+    // discard unsupported suffixes. Only the optional v prefix is equivalent.
+    if let Some(tag) = tag_names
+        .iter()
+        .find(|tag| tag.strip_prefix('v').unwrap_or(tag) == version)
+    {
+        return Err(DefaultError::new(messages::upcoming_version_exists(
+            upcoming_version,
+            tag,
+        )));
     }
+    Ok(())
 }
 
 fn calculate_stable(

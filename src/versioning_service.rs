@@ -11,8 +11,6 @@ use std::error::Error;
 const SEMANTIC_VERSION_TAG_OFFICIAL_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+)$";
 const SEMANTIC_VERSION_TAG_PRERELEASE_PATTERN: &str = r"^v?([0-9]+\.[0-9]+\.[0-9]+-.+)$";
 
-type OfficialVersionCandidates<'a> = BTreeMap<(u64, u64, u64), Vec<&'a str>>;
-
 #[derive(PartialEq, Eq)]
 enum TagKind {
     Official,
@@ -252,22 +250,32 @@ fn promote_reachable_candidate(
     last_official_version: &SemanticVersion,
     target: Option<&ReleaseTarget>,
 ) -> Result<String, Box<dyn Error>> {
-    let candidates = collect_official_candidates(reachable_tags, last_official_version);
-    match (select_official_candidate(&candidates)?, target) {
+    match (
+        select_official_candidate(reachable_tags, last_official_version)?,
+        target,
+    ) {
         (Some(version), _) => Ok(version),
         (None, Some(target)) => Err(target_error(format!(
             "No reachable prerelease for target {}. Select an exact --candidate, or use --scope {} --stage stable to calculate the target directly.",
             target.version.to_string(true), target.scope.as_str()
         ))),
-        (None, None) => Ok(minor_fallback_version(last_official_version)),
+        (None, None) => {
+            log::warn!(
+                "No newer reachable pre-release after last official tag ({}). Fallback to minor bump.",
+                last_official_version.to_string(true)
+            );
+            Ok(last_official_version
+                .increase_by_scope("minor".to_string())
+                .to_string(true))
+        }
     }
 }
 
-fn collect_official_candidates<'a>(
-    reachable_tags: &[&'a VersionTag],
+fn select_official_candidate(
+    reachable_tags: &[&VersionTag],
     last_official_version: &SemanticVersion,
-) -> OfficialVersionCandidates<'a> {
-    let mut candidates = OfficialVersionCandidates::new();
+) -> Result<Option<String>, Box<dyn Error>> {
+    let mut candidates: BTreeMap<_, Vec<&str>> = BTreeMap::new();
     for tag in reachable_tags {
         if tag.kind != TagKind::Prerelease {
             continue;
@@ -280,12 +288,7 @@ fn collect_official_candidates<'a>(
                 .push(tag.name.as_str());
         }
     }
-    candidates
-}
 
-fn select_official_candidate(
-    candidates: &OfficialVersionCandidates<'_>,
-) -> Result<Option<String>, Box<dyn Error>> {
     if candidates.len() > 1 {
         let tags = candidates
             .values()
@@ -306,16 +309,6 @@ fn select_official_candidate(
         .map(|(major, minor, patch)| format!("v{major}.{minor}.{patch}")))
 }
 
-fn minor_fallback_version(last_official_version: &SemanticVersion) -> String {
-    log::warn!(
-        "No newer reachable pre-release after last official tag ({}). Fallback to minor bump.",
-        last_official_version.to_string(true)
-    );
-    last_official_version
-        .increase_by_scope("minor".to_string())
-        .to_string(true)
-}
-
 fn promote_explicit_candidate(
     repo_path: &str,
     candidate: &str,
@@ -323,39 +316,13 @@ fn promote_explicit_candidate(
     all_tags: &[VersionTag],
     last_official_version: &SemanticVersion,
 ) -> Result<String, Box<dyn Error>> {
-    validate_candidate_tag_exists(candidate, all_tag_names)?;
-    let version = parse_candidate_prerelease(candidate)?;
-    validate_candidate_tag_commit(repo_path, candidate)?;
-
-    let official = version.release();
-    validate_candidate_version_increase(candidate, &official, last_official_version)?;
-    validate_candidate_not_released(candidate, &official, all_tags)?;
-
-    Ok(official.to_string(true))
-}
-
-fn invalid_candidate(candidate: &str, reason: impl Into<String>) -> Box<dyn Error> {
-    DefaultError {
-        message: format!("Invalid candidate '{candidate}': {}", reason.into()),
-        source: None,
-    }
-    .into()
-}
-
-fn validate_candidate_tag_exists(
-    candidate: &str,
-    all_tag_names: &[String],
-) -> Result<(), Box<dyn Error>> {
     if !all_tag_names.iter().any(|tag| tag == candidate) {
         return Err(invalid_candidate(
             candidate,
             "tag not found; fetch the exact tag before retrying",
         ));
     }
-    Ok(())
-}
 
-fn parse_candidate_prerelease(candidate: &str) -> Result<SemanticVersion, Box<dyn Error>> {
     let version = SemanticVersion::from_string(candidate.to_string())
         .map_err(|reason| invalid_candidate(candidate, reason))?;
     // The legacy parser tolerates extra fields. Explicit selection must name
@@ -368,21 +335,12 @@ fn parse_candidate_prerelease(candidate: &str) -> Result<SemanticVersion, Box<dy
             "expected a valid dev or rc prerelease tag",
         ));
     }
-    Ok(version)
-}
 
-fn validate_candidate_tag_commit(repo_path: &str, candidate: &str) -> Result<(), Box<dyn Error>> {
     git_service::tag_commit_id(repo_path, candidate).map_err(|error| {
         invalid_candidate(candidate, format!("tag must point to a commit: {error}"))
     })?;
-    Ok(())
-}
 
-fn validate_candidate_version_increase(
-    candidate: &str,
-    official: &SemanticVersion,
-    last_official_version: &SemanticVersion,
-) -> Result<(), Box<dyn Error>> {
+    let official = version.release();
     if official.cmp(last_official_version) != Ordering::Greater {
         return Err(invalid_candidate(
             candidate,
@@ -392,21 +350,21 @@ fn validate_candidate_version_increase(
             ),
         ));
     }
-    Ok(())
-}
-
-fn validate_candidate_not_released(
-    candidate: &str,
-    official: &SemanticVersion,
-    all_tags: &[VersionTag],
-) -> Result<(), Box<dyn Error>> {
-    if let Some(tag) = find_published_official(all_tags, official) {
+    if let Some(tag) = find_published_official(all_tags, &official) {
         return Err(invalid_candidate(
             candidate,
             format!("official version already exists as tag '{tag}'"),
         ));
     }
-    Ok(())
+    Ok(official.to_string(true))
+}
+
+fn invalid_candidate(candidate: &str, reason: impl Into<String>) -> Box<dyn Error> {
+    DefaultError {
+        message: format!("Invalid candidate '{candidate}': {}", reason.into()),
+        source: None,
+    }
+    .into()
 }
 
 fn find_published_official<'a>(

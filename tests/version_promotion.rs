@@ -90,6 +90,118 @@ fn unrelated_candidates_do_not_change_the_rc_free_minor_fallback() {
     assert_official(repo.command().arg("version"), "v1.3.0", "v1.2.3");
 }
 
+fn assert_stable_collision(scope: &str, candidate: Option<&str>, upcoming: &str) {
+    for annotated in [false, true] {
+        for prefix in ["", "v"] {
+            let repo = released_repo();
+            let base = head(&repo.repo);
+            let target = commit(&repo.repo, "main", "current work", &[base]);
+            if let Some(candidate) = candidate {
+                tag(&repo.repo, candidate, target, annotated);
+            }
+            let future = commit(&repo.repo, "future", "separate release", &[base]);
+            let published = format!("{prefix}{upcoming}");
+            tag(&repo.repo, &published, future, annotated);
+
+            repo.command()
+                .args(["version", "--scope", scope, "--stage", "stable"])
+                .assert()
+                .code(1)
+                .stdout("")
+                .stderr(predicate::str::contains(format!(
+                    "Upcoming version v{upcoming} already exists as tag '{published}'"
+                )));
+        }
+    }
+}
+
+#[test]
+fn automatic_promotion_rejects_an_upcoming_version_published_outside_target_history() {
+    assert_stable_collision("release", Some("v1.2.4-rc.1"), "1.2.4");
+}
+
+#[test]
+fn direct_stable_bumps_reject_an_upcoming_version_published_outside_target_history() {
+    for (scope, upcoming) in [("patch", "1.2.4"), ("minor", "1.3.0"), ("major", "2.0.0")] {
+        assert_stable_collision(scope, None, upcoming);
+    }
+}
+
+#[test]
+fn minor_fallback_rejects_an_upcoming_version_published_outside_target_history() {
+    assert_stable_collision("release", None, "1.3.0");
+}
+
+#[test]
+fn prereleases_reject_an_upcoming_version_published_outside_target_history() {
+    for annotated in [false, true] {
+        for prefix in ["", "v"] {
+            for stage in ["dev", "rc"] {
+                let repo = released_repo();
+                let base = head(&repo.repo);
+                let target = commit(&repo.repo, "main", "current work", &[base]);
+                let future = commit(&repo.repo, "future", "separate release", &[base]);
+                let suffix = if stage == "dev" {
+                    format!(".{}", &target.to_string()[..8])
+                } else {
+                    String::new()
+                };
+                let upcoming = format!("1.3.0-{stage}.1{suffix}");
+                let published = format!("{prefix}{upcoming}");
+                tag(&repo.repo, &published, future, annotated);
+
+                for exact_target in [false, true] {
+                    let mut command = repo.command();
+                    command.args(["version", "--scope", "minor", "--stage", stage]);
+                    if exact_target {
+                        command.args(["--target", "1.3.0"]);
+                    }
+                    command
+                        .assert()
+                        .code(1)
+                        .stdout("")
+                        .stderr(predicate::str::contains(format!(
+                            "Upcoming version v{upcoming} already exists as tag '{published}'"
+                        )));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn upcoming_version_uniqueness_compares_the_full_prerelease_including_dev_sha() {
+    let repo = released_repo();
+    let base = head(&repo.repo);
+    let target = commit(&repo.repo, "main", "current work", &[base]);
+    let future = commit(&repo.repo, "future", "separate release", &[base]);
+    let target_sha = target.to_string()[..8].to_string();
+    let other_sha = if target_sha == "aaaaaaaa" {
+        "bbbbbbbb"
+    } else {
+        "aaaaaaaa"
+    };
+    for name in [
+        format!("1.3.0-dev.1.{other_sha}"),
+        format!("v1.3.0-dev.1.{target_sha}.extra"),
+        "v1.3.0-rc.1.extra".to_string(),
+    ] {
+        tag(&repo.repo, &name, future, false);
+    }
+
+    for (stage, upcoming) in [
+        ("dev", format!("v1.3.0-dev.1.{target_sha}")),
+        ("rc", "v1.3.0-rc.1".to_string()),
+    ] {
+        assert_official(
+            repo.command()
+                .args(["version", "--scope", "minor", "--stage", stage]),
+            &upcoming,
+            "v1.2.3",
+        );
+    }
+}
+
 #[test]
 fn shallow_history_is_an_error_even_when_tags_are_available() {
     let repo = released_repo();

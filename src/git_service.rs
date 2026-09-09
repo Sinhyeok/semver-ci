@@ -163,11 +163,54 @@ pub(crate) fn fetch_refs(
     token: &str,
     refspecs: &[&str],
 ) -> Result<()> {
+    fetch_refs_with_depth(repo, user, token, refspecs, 0)
+}
+
+pub(crate) fn fetch_complete_history(
+    repo_path: &str,
+    target_commit: &str,
+    user: &str,
+    token: &str,
+) -> Result<()> {
+    let repo = open_repository(repo_path)?;
+    if !repo.is_shallow() {
+        return Ok(());
+    }
+
+    eprintln!("Shallow CI checkout detected; fetching complete history from origin");
+    // libgit2's GIT_FETCH_DEPTH_UNSHALLOW; depth 0 leaves existing shallow roots intact.
+    fetch_refs_with_depth(
+        &repo,
+        user,
+        token,
+        &[
+            "+refs/heads/*:refs/remotes/origin/*",
+            "refs/tags/*:refs/tags/*",
+            target_commit,
+        ],
+        i32::MAX,
+    )
+    .context(messages::FETCH_COMPLETE_HISTORY)?;
+
+    if repo.is_shallow() {
+        return Err(DefaultError::new(messages::INCOMPLETE_FETCH));
+    }
+    Ok(())
+}
+
+fn fetch_refs_with_depth(
+    repo: &Repository,
+    user: &str,
+    token: &str,
+    refspecs: &[&str],
+    depth: i32,
+) -> Result<()> {
     let mut fetch_options = FetchOptions::new();
     let mut callbacks = RemoteCallbacks::new();
     callbacks.credentials(|_url, username, cred| git_auth_callback(cred, username, user, token));
 
     fetch_options.remote_callbacks(callbacks);
+    fetch_options.depth(depth);
 
     repo.find_remote("origin")
         .and_then(|mut remote| remote.fetch(refspecs, Some(&mut fetch_options), None))

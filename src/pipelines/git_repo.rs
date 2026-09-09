@@ -40,4 +40,8 @@ impl Pipeline for GitRepo {
         flag.parse()
             .context(messages::invalid_boolean("FORCE_FETCH_TAGS", &flag))
     }
+
+    fn fetch_complete_history(&self) -> bool {
+        false
+    }
 }

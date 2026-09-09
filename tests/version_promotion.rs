@@ -248,6 +248,163 @@ fn ci_command(repo: &TestRepo, github: bool, target: &str) -> Command {
     command
 }
 
+#[cfg(unix)]
+#[path = "common/git_server.rs"]
+mod git_server;
+
+#[cfg(unix)]
+mod shallow_ci {
+    use super::*;
+
+    fn shallow_clone(url: &str) -> (tempfile::TempDir, Repository) {
+        let directory = tempfile::tempdir().unwrap();
+        Command::new("git")
+            .args(["clone", "--depth=1", "--no-tags", url])
+            .arg(directory.path())
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .assert()
+            .success();
+        let repo = Repository::open(directory.path()).unwrap();
+        assert!(repo.is_shallow());
+        assert_eq!(repo.tag_names(None).unwrap().len(), 0);
+        (directory, repo)
+    }
+
+    #[test]
+    fn ci_completes_history_without_changing_the_checkout_or_event_commit() {
+        let source = released_repo();
+        let candidate = commit(&source.repo, "main", "candidate", &[head(&source.repo)]);
+        tag(&source.repo, "v1.2.4-rc.2", candidate, true);
+        tag(&source.repo, "v1.2.4-dev.3.abcdef12", candidate, false);
+        for index in 0..25 {
+            commit(
+                &source.repo,
+                "main",
+                &format!("work {index}"),
+                &[head(&source.repo)],
+            );
+        }
+        let event = head(&source.repo);
+        let newer = commit(&source.repo, "main", "newer checkout", &[event]);
+        tag(&source.repo, "v2.0.0", newer, true);
+        let server = git_server::GitServer::new(source.repo.workdir().unwrap());
+
+        for github in [false, true] {
+            for (stage, scope, upcoming, last) in [
+                ("stable", "release", "v1.2.4".to_string(), "v1.2.3"),
+                ("rc", "patch", "v1.2.4-rc.3".to_string(), "v1.2.4-rc.2"),
+                (
+                    "dev",
+                    "patch",
+                    format!("v1.2.4-dev.4.{}", &event.to_string()[..8]),
+                    "v1.2.4-dev.3.abcdef12",
+                ),
+            ] {
+                let (directory, checkout) = shallow_clone(&server.url());
+                assert!(checkout.find_commit(candidate).is_err());
+                checkout.set_head_detached(newer).unwrap();
+                std::fs::write(directory.path().join("keep.txt"), "local work").unwrap();
+                let mut command = ci_command(&source, github, &event.to_string());
+                command
+                    .env("CLONE_TARGET_PATH", directory.path())
+                    .args(["--stage", stage, "--scope", scope]);
+                assert_official(&mut command, &upcoming, last);
+                let checkout = Repository::open(directory.path()).unwrap();
+                assert!(!checkout.is_shallow());
+                assert_eq!(head(&checkout), newer);
+                assert!(checkout.head_detached().unwrap());
+                assert_eq!(
+                    std::fs::read_to_string(directory.path().join("keep.txt")).unwrap(),
+                    "local work"
+                );
+                // A later invocation still fetches tags but does not unshallow again.
+                command
+                    .assert()
+                    .success()
+                    .stderr(predicate::str::contains("Shallow CI checkout").not());
+            }
+        }
+    }
+
+    #[test]
+    fn ci_fetches_tags_outside_the_event_history_to_detect_collisions() {
+        let source = released_repo();
+        let base = head(&source.repo);
+        let target = commit(&source.repo, "main", "candidate", &[base]);
+        tag(&source.repo, "v1.2.4-rc.1", target, false);
+        let other = commit(&source.repo, "other", "separate release", &[base]);
+        tag(&source.repo, "v1.2.4", other, true);
+        let server = git_server::GitServer::new(source.repo.workdir().unwrap());
+        for github in [false, true] {
+            let (directory, _) = shallow_clone(&server.url());
+            ci_command(&source, github, &target.to_string())
+                .env("CLONE_TARGET_PATH", directory.path())
+                .assert()
+                .failure()
+                .stdout("")
+                .stderr(predicate::str::contains("already exists as tag 'v1.2.4'"));
+        }
+    }
+
+    #[test]
+    fn ci_fetch_failure_has_no_version_output_and_local_runs_do_not_fetch_history() {
+        let source = released_repo();
+        let target = commit(&source.repo, "main", "current work", &[head(&source.repo)]);
+        let server = git_server::GitServer::new(source.repo.workdir().unwrap());
+        for github in [false, true] {
+            let (directory, checkout) = shallow_clone(&server.url());
+            checkout
+                .remote_set_url(
+                    "origin",
+                    directory.path().join("missing.git").to_str().unwrap(),
+                )
+                .unwrap();
+            ci_command(&source, github, &target.to_string())
+                .env("CLONE_TARGET_PATH", directory.path())
+                .assert()
+                .failure()
+                .stdout("")
+                .stderr(predicate::str::contains(
+                    "Failed to fetch complete CI history from origin",
+                ));
+            source
+                .command()
+                .arg("version")
+                .env("CLONE_TARGET_PATH", directory.path())
+                .assert()
+                .failure()
+                .stdout("")
+                .stderr(predicate::str::contains("requires complete history"))
+                .stderr(predicate::str::contains("Shallow CI checkout").not());
+            assert!(Repository::open(directory.path()).unwrap().is_shallow());
+        }
+    }
+
+    #[test]
+    fn ci_rejects_a_remote_that_cannot_supply_complete_history() {
+        let source = released_repo();
+        let target = commit(&source.repo, "main", "current work", &[head(&source.repo)]);
+        let server = git_server::GitServer::new(source.repo.workdir().unwrap());
+        let (origin_directory, _) = shallow_clone(&server.url());
+        let shallow_origin = git_server::GitServer::new(origin_directory.path());
+        for github in [false, true] {
+            let (directory, _) = shallow_clone(&shallow_origin.url());
+            ci_command(&source, github, &target.to_string())
+                .env("CLONE_TARGET_PATH", directory.path())
+                .assert()
+                .failure()
+                .stdout("")
+                .stderr(
+                    predicate::str::contains("Failed to fetch complete CI history").or(
+                        predicate::str::contains("Repository is still shallow after fetching"),
+                    ),
+                );
+            assert!(Repository::open(directory.path()).unwrap().is_shallow());
+        }
+    }
+}
+
 #[test]
 fn both_ci_providers_infer_policy_from_the_ci_branch_without_scope_command() {
     for github in [false, true] {

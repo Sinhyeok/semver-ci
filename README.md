@@ -434,9 +434,9 @@ only existing local tags. Local tagging also uses Git's `user.name` and `user.em
 | `GIT_SSH_KEY_PATH` | Unset | Private key path; required when Git authenticates over SSH. |
 | `GIT_SSH_KEY_PASSPHRASE` | Unset | Optional passphrase for the SSH key. |
 
-GitHub Actions and GitLab CI always fetch tags before calculating a version.
-`FORCE_FETCH_TAGS` controls local Git runs only. Fetching tags alone does not
-complete a shallow repository's commit history.
+GitHub Actions and GitLab CI always fetch tags and automatically complete shallow
+history before calculating a version. `FORCE_FETCH_TAGS` controls local Git runs
+only; it fetches tags without completing shallow history.
 
 ## Commands
 
@@ -567,12 +567,18 @@ in its line, and missing bases also fail without version outputs.
 
 ### Shallow clones and missing tags
 
-All version calculation requires full history.
-Use `GIT_DEPTH: "0"` in GitLab CI or
-`fetch-depth: 0` with `actions/checkout`. Semver-CI's internal GitHub Actions clone
-fetches full history when it creates the checkout itself.
+All version calculation requires full history. In GitHub Actions and GitLab CI,
+`svci version` detects shallow checkouts and fetches complete history and tags
+from `origin` using the configured Git credentials. It preserves the checkout
+and calculates the version for the CI event commit. `GIT_DEPTH: "0"` and
+`fetch-depth: 0` are optional; the version job downloads the missing history
+automatically. Semver-CI's internal GitHub Actions clone also fetches full history.
 
-For an existing shallow clone:
+If fetching fails or the remote cannot supply complete history, the command
+fails without version outputs. Check repository access or use a full checkout.
+
+Local runs do not automatically complete shallow history. Before calculating a
+version in a shallow local clone, run:
 
 ```shell
 git fetch --unshallow --tags

@@ -27,6 +27,9 @@ pub(crate) trait Pipeline {
     fn force_fetch_tags(&self) -> Result<bool> {
         Ok(true)
     }
+    fn fetch_complete_history(&self) -> bool {
+        true
+    }
     fn create_release(&self, _release: &Release) -> Result<HashMap<String, Value>> {
         Err(DefaultError::new(messages::unsupported_pipeline(
             &self.name(),

@@ -35,6 +35,16 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<()> {
     let (scope, stage) = resolve_policy(&pipeline_info.branch_name, &args)?;
     let target =
         branch_rules::resolve_target(&pipeline_info.branch_name, args.target.as_deref(), scope)?;
+    let target_commit = pipeline.target_commit()?;
+
+    if pipeline.fetch_complete_history() {
+        git_service::fetch_complete_history(
+            &repo_path,
+            &target_commit,
+            &pipeline_info.git_username,
+            &pipeline_info.git_token,
+        )?;
+    }
 
     let tag_names = git_service::tag_names(
         &repo_path,
@@ -46,7 +56,7 @@ pub(crate) fn run(args: VersionCommandArgs) -> Result<()> {
 
     let versions = versioning::calculate(VersionRequest {
         repo_path: &repo_path,
-        target_commit: &pipeline.target_commit()?,
+        target_commit: &target_commit,
         short_commit_sha: &pipeline_info.short_commit_sha,
         scope,
         stage,

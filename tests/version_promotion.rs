@@ -578,6 +578,41 @@ fn github_internal_clone_keeps_full_history_and_checks_out_the_event_commit() {
 }
 
 #[test]
+fn github_trusts_the_absolute_checkout_path_for_relative_clone_targets() {
+    let repo = released_repo();
+    let target = head(&repo.repo);
+    let server = tempfile::tempdir().unwrap();
+    Repository::clone(
+        repo.repo.workdir().unwrap().to_str().unwrap(),
+        server.path().join("repo.git"),
+    )
+    .unwrap();
+    for relative in [".", "nested/checkout"] {
+        let workspace = tempfile::tempdir().unwrap();
+        let mut command = ci_command(&repo, true, &target.to_string());
+        command
+            .current_dir(workspace.path())
+            .env(
+                "GITHUB_SERVER_URL",
+                format!("file://{}", server.path().display()),
+            )
+            .env("GITHUB_REPOSITORY", "repo")
+            .env("GITHUB_REF", "refs/heads/main")
+            .env("CLONE_TARGET_PATH", relative);
+        assert_official(&mut command, "v1.3.0", "v1.2.3");
+        let path = workspace.path().join(relative).canonicalize().unwrap();
+        let config =
+            git2::Config::open(&repo.repo.workdir().unwrap().join("test-config/git/config"))
+                .unwrap();
+        assert_eq!(
+            config.get_string("safe.directory").unwrap(),
+            path.to_str().unwrap()
+        );
+        assert_eq!(head(&Repository::open(path).unwrap()), target);
+    }
+}
+
+#[test]
 fn different_versions_merged_into_target_are_ambiguous() {
     let repo = released_repo();
     let base = head(&repo.repo);

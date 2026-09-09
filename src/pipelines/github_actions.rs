@@ -13,7 +13,7 @@ pub const GITHUB_ACTIONS: &str = "GITHUB_ACTIONS";
 
 impl Pipeline for GithubActions {
     fn init(&self) -> Result<()> {
-        // Git config: "safe.directory=."
+        // GitHub's mounted workspace can be owned by a different container user.
         self.add_safe_directory()?;
 
         // Clone
@@ -98,7 +98,10 @@ impl Pipeline for GithubActions {
 
 impl GithubActions {
     fn add_safe_directory(&self) -> Result<()> {
-        git_service::set_global_config_value("safe.directory", &config::clone_target_path()?)
+        let path = config::clone_target_path()?;
+        std::fs::create_dir_all(&path).context(messages::clone_repository(&path))?;
+        let path = std::fs::canonicalize(&path).context(messages::open_repository(&path))?;
+        git_service::set_global_config_value("safe.directory", &path.to_string_lossy())
     }
 
     fn clone(&self) -> Result<()> {
